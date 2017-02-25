@@ -1,6 +1,7 @@
 # easyGEN
 
-R package with utility functions to help with data analysis
+R package with utility functions to help with data quantitative genetics analysis, create parameter file, run REMLf90 and GIBBS2f90, as well as to summarize the bayesian results from GIBBS2f90 and DMU package.
+
 
 # How to Install
 
@@ -13,6 +14,7 @@ Some functions require some bioconductor packages in order to work. As this pack
 source("https://bioconductor.org/biocLite.R")
 
 biocLite("Rgraphviz")
+
 
 # Overview
 
