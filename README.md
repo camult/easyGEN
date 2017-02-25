@@ -10,7 +10,8 @@ devtools::install_github("camult/easyGEN")
 
 Some functions require some bioconductor packages in order to work. As this package is not part of bioconductor, devtools will not automatically install it for you (see this thread for more details). You will have to install them manually:
 
-source("https://bioconductor.org/biocLite.R");
+source("https://bioconductor.org/biocLite.R")
+
 biocLite("Rgraphviz")
 
 # Overview
