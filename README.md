@@ -2,6 +2,8 @@
 
 R package with utility functions to help with data quantitative genetics analysis, create parameter file, run REMLf90 and GIBBS2f90, as well as to summarize the bayesian results from GIBBS2f90 and DMU package.
 
+This package has also an option "ICgraph" that get partially, oriented graph, connected pairs and unshielded colliders, using Complete IC Algorithm adapted to work with variable number of traits (Valente et al., 2010).
+
 
 # How to Install
 
