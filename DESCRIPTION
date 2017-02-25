@@ -1,0 +1,21 @@
+Package: easyGEN
+Type: Package
+Title: R functions for interfacing BLUPf90 family softwares
+Version: 1.01
+Date: 2016-11-29
+Author: Fernando Brito Lopes
+Maintainer: Fernando Brito Lopes <camult@gmail.com>
+Depends:
+    R (>= 3.1),
+    Rgraphviz,
+    coda,
+    graph,
+    gdata,
+    WriteXLS,
+    Matrix
+Description: This package is easy to use and can be helpful to create parameter file, to run REMLf90 and GIBBS2f90, as well as to summarize the bayesian results from GIBBS2f90 and DMU package.
+LazyData: true
+License: GPL-3
+SystemRequirements: Perl
+Archs: i386, x64
+RoxygenNote: 6.0.1
