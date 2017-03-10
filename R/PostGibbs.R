@@ -23,6 +23,8 @@
 #' @param Names It is a vector with the names of traits.
 #' @param ICgraph It is a logical name, indicating if the IC Graph should be created.
 #' @param Summary It is a logical name, indicating if the statistical summary should be run.
+#' @param covAM type 0 if covariance between additive and maternal genetic effects must be fixed in zero, 1 otherwise. By default covAM=1.
+#' 
 #' 
 #' @return A PDF file with graphics that summarizes an as.mcmc.obj 
 #'         with a trace of the sampled output, a density estimate for each variable 
@@ -77,8 +79,8 @@
 #' @import Rgraphviz WriteXLS coda Matrix graph gdata
 ##------------------------------------------------------------------------------------------##
 PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
-                   Names=c(),ICgraph=FALSE,Summary=TRUE){
-  ##----------------------------------------------------------------------------------------##
+                   Names=c(),ICgraph=FALSE,Summary=TRUE, covAM=1){
+  ##---------------------------------------------------------------------------------------##
   ## Matrix functions
   ##----------------------------------------------------------------------------------------##
   ginv <- function(X, tol = sqrt(.Machine$double.eps)){
@@ -304,18 +306,27 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
       mode(last1M)="numeric"
       last1M=c(tail(na.omit(last1M), n=1))
       #----------------------------------------------------------------------------------------#
+      n1M=as.matrix(strsplit(as.character(Matrix[traits+2]), " ")[[1]])
+      mode(n1M)="numeric"
+      n1M=rev(na.omit(n1M))[1] # Reading the last value
+      #----------------------------------------------------------------------------------------#
       n2M=as.matrix(strsplit(as.character(Matrix[n1matrix+3]), " ")[[1]])
       mode(n2M)="numeric"
       n2M=na.omit(n2M)[2]
       #----------------------------------------------------------------------------------------#
-      # Uni=A + R          --  A and R are vectors
+      # Uni=A + R          --> A and R are vectors
       # A = A + M + R      --> M for all traits
       # B = A + M + R      --> M for only for pre weaning traits
       # C = A + R          --> A and R are matrix
       #----------------------------------------------------------------------------------------#
       Uni=(n1matrix==1) ##
-      A=(n1matrix==traits*2 & last1M!=0 & n2M!=0) ## A and M for all traits
-      B=(n1matrix==traits*2 & last1M==0 & n2M!=0) ## Maternal only for the firsts traits
+      if(covAM==0){
+        A=(n1matrix==traits*2 & last1M==0 & n1M!= 0 & n2M!=0) ## A and M for all traits
+        B=(n1matrix==traits*2 & last1M==0 & n1M== 0 & n2M!=0) ## Maternal only for the firsts traits
+      } else {
+        A=(n1matrix==traits*2 & last1M!=0 & n2M!=0) ## A and M for all traits
+        B=(n1matrix==traits*2 & last1M==0 & n2M!=0) ## Maternal only for the firsts traits
+      }
       C=(n1matrix==traits & n2M!=0)               ## A and R are matrix
       if(is.na(C)){C=FALSE}
       #----------------------------------------------------------------------------------------#
@@ -395,38 +406,70 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
         dG=as.matrix(diag(mG))
         dR=as.matrix(diag(mR))
         Ha=matrix(NA, nrow=nrow(arq), ncol=traits)
-        for(i in 1:traits){
-          aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
-                              (arq[ ,dG[traits+i]])+
-                              (abs((abs((arq[ ,mG[i,traits+i]])))))+
-                              (arq[ ,dR[i]]))
-          Ha[,i]=aux
-          colnames(Ha)=c(paste('ha', seq(1:traits), sep=''))
-        }
         Hm=matrix(NA, nrow=nrow(arq), ncol=traits)
-        for(i in 1:traits){
-          aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
-                                     (arq[ ,dG[traits+i]])+
-                                     (abs((arq[ ,mG[i,traits+i]])))+
-                                     (arq[ ,dR[i]]))
-          Hm[,i]=aux
-          colnames(Hm)=c(paste('hm', seq(1:traits), sep=''))
+        if(covAM==0){
+          for(i in 1:traits){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[1 ,dG[traits+i]])+
+                                (arq[ ,dR[i]]))
+            Ha[,i]=aux
+            colnames(Ha)=c(paste('ha', seq(1:traits), sep=''))
+          }
+          for(i in 1:traits){
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
+                                       (arq[ ,dG[traits+i]])+
+                                       (arq[ ,dR[i]]))
+            Hm[,i]=aux
+            colnames(Hm)=c(paste('hm', seq(1:traits), sep=''))
+          }
+          effectG=traits
+          CorrG = matrix(NA, nrow=nrow(arq), ncol=2*((effectG^2-effectG)/2))
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:dG[traits]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,1:length(aux)]=aux
+            aux=vec2sm(arq[i,dG[traits+1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,(length(aux)+1):ncol(CorrG)]=aux
+          }
+          options(warn=0)
+        } else {
+          for(i in 1:traits){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[1 ,dG[traits+i]])+
+                                (abs((abs((arq[ ,mG[i,traits+i]])))))+
+                                (arq[ ,dR[i]]))
+            Ha[,i]=aux
+            colnames(Ha)=c(paste('ha', seq(1:traits), sep=''))
+          }
+          for(i in 1:traits){
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
+                                       (arq[ ,dG[traits+i]])+
+                                       (abs((arq[ ,mG[i,traits+i]])))+
+                                       (arq[ ,dR[i]]))
+            Hm[,i]=aux
+            colnames(Hm)=c(paste('hm', seq(1:traits), sep=''))
+          }
+          effectG=nnzero(dG)
+          CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2))
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,]=aux
+          }
+          options(warn=0)
         }
-        effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2))
-        options(warn=-1)
-        for(i in 1:nrow(arq)){
-          aux=vec2sm(arq[i,dG[1]:rev(dG)[1]])
-          aux=cov2cor(aux)
-          aux=aux[lower.tri(aux)]
-          CorrG[i,]=aux
-        }
-        options(warn=0)
         #----------------------------------------------------------------------------------#
         vG=dG; vG[vG==0]=NA; vG=na.omit(vG); vG=data.frame(id=vG, comp=c(paste("Vga",seq(1:traits),sep=""), paste("Vgm",seq(1:traits),sep="")))
         vR=dR; vR[vR==0]=NA; vR=na.omit(vR); vR=data.frame(id=vR, comp=paste("Ve", seq(1:nrow(vR)), sep=""))
         #--------------------------------------------------------------------------------------#
         covG=mG[upper.tri(mG)]; covG[covG==0]=NA; covG=c(na.omit(covG));covG=sort(covG)
-        matrixG=mG; diag(matrixG)=0; matrixG=which(matrixG!=0,arr.ind=T)        
+        matrixG=mG; diag(matrixG)=0; matrixG=which(matrixG!=0,arr.ind=T)      
         if (nrow(matrixG)>1){ matrixG=matrixG[order(matrixG[,1], matrixG[,2]), ] }
         covG=data.frame(id=covG, comp=paste("COV","g",matrixG[,1],"g",matrixG[,2], sep=""))
         CorrG=data.frame(id=seq(1:ncol(CorrG)), t(CorrG))
@@ -507,7 +550,6 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
         #--------------------------------------------------------------------------------------#
       }
       #----------------------------------------------------------------------------------------#
-      #----------------------------------------------------------------------------------------#
       if(B==TRUE){
         #--------------------------------------------------------------------------------------#
         cat("Estimating genetic and environmental parameters...\n")
@@ -524,41 +566,47 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
         dG=as.matrix(diag(mG))
         dR=as.matrix(diag(mR))
         #--------------------------------------------------------------------------------------#
-        if (matrix(na.omit(as.numeric(as.matrix(unlist(strsplit(as.character(Matrix[2:(n1matrix+1)]), " "))))), nrow=n1matrix, byrow=T)[1,(traits+1)]==0){
+        if(covAM==0){
           Hapre=matrix(NA, nrow=nrow(arq), ncol=pre)
           for(i in 1:pre){
-            aux=arq[ ,dG[i+1]]/(arq[ ,dG[i+1]]+
-                                  (arq[ ,dG[traits+i]])+
-                                  (abs((arq[ ,mG[i+1,traits+i]])))+
-                                  (arq[ ,dR[i+1]]))
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (arq[ ,dR[i]]))
             Hapre[,i]=aux
             colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
           }
           #--------------------------------------------------------------------------------------#
           Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
           for(i in 1:post){
-            if(i==1){
-              aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+(arq[ ,dR[i]]))
-              Hapost[,i]=aux
-            }else{
-              aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+(arq[ ,dR[pre+i]]))
-              Hapost[,i]=aux
-            }
+            aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+(arq[ ,dR[pre+i]]))
+            Hapost[,i]=aux
             colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
           }
           Ha=cbind(Hapre, Hapost)
           #--------------------------------------------------------------------------------------#
           Hm=matrix(NA, nrow=nrow(arq), ncol=pre)
           for(i in 1:pre){
-            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i+1]]+
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
                                        (arq[ ,dG[traits+i]])+
-                                       (abs((arq[ ,mG[i+1,traits+i]])))+
-                                       (arq[ ,dR[i+1]]))
+                                       (arq[ ,dR[i]]))
             Hm[,i]=aux
             colnames(Hm)=c(paste('hm', seq(1:pre), sep=''))
           }
           #--------------------------------------------------------------------------------------#
-        }else{
+          effectG=traits
+          CorrG = matrix(NA, nrow=nrow(arq), ncol=2*((effectG^2-effectG)/2))
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:dG[traits]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,1:length(aux)]=aux
+            aux=vec2sm(arq[i,dG[traits+1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,(length(aux)+1):ncol(CorrG)]=aux
+          }
+        } else {
           Hapre=matrix(NA, nrow=nrow(arq), ncol=pre)
           for(i in 1:pre){
             aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
@@ -586,16 +634,17 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
             Hm[,i]=aux
             colnames(Hm)=c(paste('hm', seq(1:pre), sep=''))
           }
+          #--------------------------------------------------------------------------------------#
+          effectG=nnzero(dG)
+          CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:rev(dG)[post+1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,]=aux
+          }
         }
         #--------------------------------------------------------------------------------------#
-        effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
-        for(i in 1:nrow(arq)){
-          aux=vec2sm(arq[i,dG[1]:rev(dG)[post+1]])
-          aux=cov2cor(aux)
-          aux=aux[lower.tri(aux)]
-          CorrG[i,]=aux
-        }
-        #----------------------------------------------------------------------------------#
         vG=dG; vG[vG==0]=NA; vG=na.omit(vG); vG=data.frame(id=vG, comp=c(paste("Vga",seq(1:traits),sep=""), paste("Vgm",seq(1:pre),sep="")))
         vR=dR; vR[vR==0]=NA; vR=na.omit(vR); vR=data.frame(id=vR, comp=paste("Ve", seq(1:nrow(vR)), sep=""))
         #--------------------------------------------------------------------------------------#
@@ -798,32 +847,64 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
         dG=as.matrix(diag(mG))
         dR=as.matrix(diag(mR))
         Ha=matrix(NA, nrow=nrow(arq), ncol=traits)
-        for(i in 1:traits){
-          aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
-                              (arq[ ,dG[traits+i]])+
-                              (abs((arq[ ,mG[i,traits+i]])))+
-                              (arq[ ,dR[i]]))
-          Ha[,i]=aux
-          colnames(Ha)=c(paste('ha', seq(1:traits), sep=''))
-        }
         Hm=matrix(NA, nrow=nrow(arq), ncol=traits)
-        for(i in 1:traits){
-          aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
-                                     (arq[ ,dG[traits+i]])+
-                                     (abs((arq[ ,mG[i,traits+i]])))+
-                                     (arq[ ,dR[i]]))
-          Hm[,i]=aux
-          colnames(Hm)=c(paste('hm', seq(1:traits), sep=''))
+        if(covAM==0){
+          for(i in 1:traits){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[1 ,dG[traits+i]])+
+                                (arq[ ,dR[i]]))
+            Ha[,i]=aux
+            colnames(Ha)=c(paste('ha', seq(1:traits), sep=''))
+          }
+          for(i in 1:traits){
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
+                                       (arq[ ,dG[traits+i]])+
+                                       (arq[ ,dR[i]]))
+            Hm[,i]=aux
+            colnames(Hm)=c(paste('hm', seq(1:traits), sep=''))
+          }
+          effectG=traits
+          CorrG = matrix(NA, nrow=nrow(arq), ncol=2*((effectG^2-effectG)/2))
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:dG[traits]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,1:length(aux)]=aux
+            aux=vec2sm(arq[i,dG[traits+1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,(length(aux)+1):ncol(CorrG)]=aux
+          }
+          options(warn=0)
+        } else {
+          for(i in 1:traits){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (abs((arq[ ,mG[i,traits+i]])))+
+                                (arq[ ,dR[i]]))
+            Ha[,i]=aux
+            colnames(Ha)=c(paste('ha', seq(1:traits), sep=''))
+          }
+          for(i in 1:traits){
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
+                                       (arq[ ,dG[traits+i]])+
+                                       (abs((arq[ ,mG[i,traits+i]])))+
+                                       (arq[ ,dR[i]]))
+            Hm[,i]=aux
+            colnames(Hm)=c(paste('hm', seq(1:traits), sep=''))
+          }
+          effectG=nnzero(dG)
+          CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,]=aux
+          }
+          options(warn=0)
         }
-        effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
-        options(warn=-1)
-        for(i in 1:nrow(arq)){
-          aux=vec2sm(arq[i,dG[1]:rev(dG)[1]])
-          aux=cov2cor(aux)
-          aux=aux[lower.tri(aux)]
-          CorrG[i,]=aux
-        }
-        options(warn=0)
         #----------------------------------------------------------------------------------#
         vG=dG; vG[vG==0]=NA; vG=na.omit(vG); vG=data.frame(id=vG, comp=c(paste("Vga",seq(1:traits),sep=""), paste("Vgm",seq(1:traits),sep="")))
         vR=dR; vR[vR==0]=NA; vR=na.omit(vR); vR=data.frame(id=vR, comp=paste("Ve", seq(1:nrow(vR)), sep=""))
@@ -893,41 +974,48 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
         dG=as.matrix(diag(mG))
         dR=as.matrix(diag(mR))
         #--------------------------------------------------------------------------------------#
-        if (matrix(na.omit(as.numeric(as.matrix(unlist(strsplit(as.character(Matrix[2:(n1matrix+1)]), " "))))), nrow=n1matrix, byrow=T)[1,(traits+1)]==0){
+        if(covAM==0){
           Hapre=matrix(NA, nrow=nrow(arq), ncol=pre)
           for(i in 1:pre){
-            aux=arq[ ,dG[i+1]]/(arq[ ,dG[i+1]]+
-                                  (arq[ ,dG[traits+i]])+
-                                  (abs((arq[ ,mG[i+1,traits+i]])))+
-                                  (arq[ ,dR[i+1]]))
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (arq[ ,dR[i]]))
             Hapre[,i]=aux
             colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
           }
           #--------------------------------------------------------------------------------------#
           Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
           for(i in 1:post){
-            if(i==1){
-              aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+(arq[ ,dR[i]]))
-              Hapost[,i]=aux
-            }else{
-              aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+(arq[ ,dR[pre+i]]))
-              Hapost[,i]=aux
-            }
+            aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+(arq[ ,dR[pre+i]]))
+            Hapost[,i]=aux
             colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
           }
           Ha=cbind(Hapre, Hapost)
           #--------------------------------------------------------------------------------------#
           Hm=matrix(NA, nrow=nrow(arq), ncol=pre)
           for(i in 1:pre){
-            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i+1]]+
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
                                        (arq[ ,dG[traits+i]])+
-                                       (abs((arq[ ,mG[i+1,traits+i]])))+
-                                       (arq[ ,dR[i+1]]))
+                                       (arq[ ,dR[i]]))
             Hm[,i]=aux
             colnames(Hm)=c(paste('hm', seq(1:pre), sep=''))
           }
           #--------------------------------------------------------------------------------------#
-        }else{
+          effectG=traits
+          CorrG = matrix(NA, nrow=nrow(arq), ncol=2*((effectG^2-effectG)/2))
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:dG[traits]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,1:length(aux)]=aux
+            aux=vec2sm(arq[i,dG[traits+1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,(length(aux)+1):ncol(CorrG)]=aux
+          }
+          options(warn=0)
+        } else {
           Hapre=matrix(NA, nrow=nrow(arq), ncol=pre)
           for(i in 1:pre){
             aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
@@ -955,17 +1043,17 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
             Hm[,i]=aux
             colnames(Hm)=c(paste('hm', seq(1:pre), sep=''))
           }
+          #--------------------------------------------------------------------------------------#
+          effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:rev(dG[1:traits+pre, ])[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,]=aux
+          }
+          options(warn=0)
         }
-        #--------------------------------------------------------------------------------------#
-        effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
-        options(warn=-1)
-        for(i in 1:nrow(arq)){
-          aux=vec2sm(arq[i,dG[1]:rev(dG[1:traits+pre, ])[1]])
-          aux=cov2cor(aux)
-          aux=aux[lower.tri(aux)]
-          CorrG[i,]=aux
-        }
-        options(warn=0)
         #----------------------------------------------------------------------------------#
         vG=dG; vG[vG==0]=NA; vG=na.omit(vG); vG=data.frame(id=vG, comp=c(paste("Vga",seq(1:traits),sep=""), paste("Vgm",seq(1:pre),sep="")))
         vR=dR; vR[vR==0]=NA; vR=na.omit(vR); vR=data.frame(id=vR, comp=paste("Ve", seq(1:nrow(vR)), sep=""))
@@ -1136,6 +1224,10 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
       mode(last1M)="numeric"
       last1M=c(tail(na.omit(last1M), n=1))
       #----------------------------------------------------------------------------------------#
+      n1M=as.matrix(strsplit(as.character(Matrix[traits+2]), " ")[[1]])
+      mode(n1M)="numeric"
+      n1M=rev(na.omit(n1M))[1] # Reading the last value
+      #----------------------------------------------------------------------------------------#
       n2M=as.matrix(strsplit(as.character(Matrix[n1matrix+3]), " ")[[1]])
       mode(n2M)="numeric"
       n2M=na.omit(n2M)[2]
@@ -1154,11 +1246,19 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
       # C = A + M + MPE + R --> M and MPE only for pre weaning traits
       # D = A + M + MPE + R --> M only for pre weaning traits, but MPE is diagonal
       #----------------------------------------------------------------------------------------#
-      A =(n1matrix==traits*2 & last1M!=0 & last2M!=0 & n2M!=0 & n3M!=0)
-      B =(n1matrix==traits*2 & last1M!=0 & last2M==0 & n2M!=0 & n3M!=0)
-      Ba=(n1matrix==traits*2 & last1M!=0 & last2M==0 & n2M==0 & n3M!=0)
-      C =(n1matrix==traits*2 & last1M==0 & last2M==0 & n2M!=0 & n3M!=0)
-      D =(n1matrix==traits*2 & last1M==0 & last2M==0 & n2M==0 & n3M!=0)
+      if(covAM==0){
+        A =(n1matrix==traits*2 & last1M==0 & last2M!=0 & n2M!=0 & n3M!=0)
+        B =(n1matrix==traits*2 & last1M==0 & last2M==0 & n2M!=0 & n3M!=0)
+        Ba=(n1matrix==traits*2 & last1M==0 & last2M==0 & n2M==0 & n3M!=0)
+        C =(n1matrix==traits*2 & last1M==0 & last2M==0 & n1M==0 & n2M!=0 & n3M!=0)
+        D =(n1matrix==traits*2 & last1M==0 & last2M==0 & n1M==0 & n2M==0 & n3M!=0)
+      } else {
+        A =(n1matrix==traits*2 & last1M!=0 & last2M!=0 & n2M!=0 & n3M!=0)
+        B =(n1matrix==traits*2 & last1M!=0 & last2M==0 & n2M!=0 & n3M!=0)
+        Ba=(n1matrix==traits*2 & last1M!=0 & last2M==0 & n2M==0 & n3M!=0)
+        C =(n1matrix==traits*2 & last1M==0 & last2M==0 & n2M!=0 & n3M!=0)
+        D =(n1matrix==traits*2 & last1M==0 & last2M==0 & n2M==0 & n3M!=0)
+      }
       #----------------------------------------------------------------------------------------#
       # E = A + M + MPE + R --> M and MPE for all traits and diag(R)
       # F = A + M + MPE + R --> M for all traits but MPE only for pre weaning traits and diag(R)
@@ -1166,11 +1266,19 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
       # G = A + M + MPE + R --> M and MPE only for pre weaning traits and diag(R)
       # H = A + M + MPE + R --> M only for pre weaning traits, diag(MPE) and diag(R)
       #----------------------------------------------------------------------------------------#
-      E =(n1matrix==traits*2 & last1M!=0 & last2M!=0 & n2M!=0 & n3M==0)
-      F =(n1matrix==traits*2 & last1M!=0 & last2M==0 & n2M!=0 & n3M==0)
-      Fa=(n1matrix==traits*2 & last1M!=0 & last2M==0 & n2M==0 & n3M==0)
-      G =(n1matrix==traits*2 & last1M==0 & last2M==0 & n2M!=0 & n3M==0)
-      H =(n1matrix==traits*2 & last1M==0 & last2M==0 & n2M==0 & n3M==0)
+      if(covAM==0){
+        E =(n1matrix==traits*2 & last1M==0 & last2M!=0 & n2M!=0 & n3M==0)
+        F =(n1matrix==traits*2 & last1M==0 & last2M==0 & n2M!=0 & n3M==0)
+        Fa=(n1matrix==traits*2 & last1M==0 & last2M==0 & n2M==0 & n3M==0)
+        G =(n1matrix==traits*2 & last1M==0 & last2M==0 & n1M==0 & n2M!=0 & n3M==0)
+        H =(n1matrix==traits*2 & last1M==0 & last2M==0 & n1M==0 & n2M==0 & n3M==0)
+      } else {
+        E =(n1matrix==traits*2 & last1M!=0 & last2M!=0 & n2M!=0 & n3M==0)
+        F =(n1matrix==traits*2 & last1M!=0 & last2M==0 & n2M!=0 & n3M==0)
+        Fa=(n1matrix==traits*2 & last1M!=0 & last2M==0 & n2M==0 & n3M==0)
+        G =(n1matrix==traits*2 & last1M==0 & last2M==0 & n2M!=0 & n3M==0)
+        H =(n1matrix==traits*2 & last1M==0 & last2M==0 & n2M==0 & n3M==0)
+      }
       #----------------------------------------------------------------------------------------#
       # R1 = A + PE + R --> All matrix
       # R2 = A + PE + R --> A matrix, PE diagonal and R matrix
@@ -1191,47 +1299,90 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
         dR=as.matrix(diag(mR))
         #--------------------------------------------------------------------------------------#
         Ha=matrix(NA, nrow=nrow(arq), ncol=traits)
-        for(i in 1:traits){
-          aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
-                              (arq[ ,dG[traits+i]])+
-                              (abs((arq[ ,mG[i,traits+i]])))+
-                              (arq[ ,dPe[i]])+
-                              (arq[ ,dR[i]]))
-          Ha[,i]=aux
-          colnames(Ha)=c(paste('ha', seq(1:traits), sep=''))
-        }
-        #--------------------------------------------------------------------------------------#
         Hm=matrix(NA, nrow=nrow(arq), ncol=traits)
-        for(i in 1:traits){
-          aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
-                                     (arq[ ,dG[traits+i]])+
-                                     (abs((arq[ ,mG[i,traits+i]])))+
-                                     (arq[ ,dPe[i]])+
-                                     (arq[ ,dR[i]]))
-          Hm[,i]=aux
-          colnames(Hm)=c(paste('hm', seq(1:traits), sep=''))
+        if(covAM==0){
+          for(i in 1:traits){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Ha[,i]=aux
+            colnames(Ha)=c(paste('ha', seq(1:traits), sep=''))
+          }
+          for(i in 1:traits){
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
+                                       (arq[ ,dG[traits+i]])+
+                                       (arq[ ,dPe[i]])+
+                                       (arq[ ,dR[i]]))
+            Hm[,i]=aux
+            colnames(Hm)=c(paste('hm', seq(1:traits), sep=''))
+          }
+          effectG=traits
+          CorrG = matrix(NA, nrow=nrow(arq), ncol=2*((effectG^2-effectG)/2))
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:dG[traits]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,1:length(aux)]=aux
+            aux=vec2sm(arq[i,dG[traits+1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,(length(aux)+1):ncol(CorrG)]=aux
+          }
+          options(warn=0)
+          #--------------------------------------------------------------------------------------#
+          c2=matrix(NA, nrow=nrow(arq), ncol=traits)
+          for(i in 1:traits){
+            aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
+                                 (arq[ ,dG[traits+i]])+
+                                 (arq[ ,dPe[i]])+
+                                 (arq[ ,dR[i]]))
+            c2[,i]=aux
+            colnames(c2)=c(paste('c', seq(1:traits), sep=''))
+          }
+        } else {
+          for(i in 1:traits){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (abs((arq[ ,mG[i,traits+i]])))+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Ha[,i]=aux
+            colnames(Ha)=c(paste('ha', seq(1:traits), sep=''))
+          }
+          for(i in 1:traits){
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
+                                       (arq[ ,dG[traits+i]])+
+                                       (abs((arq[ ,mG[i,traits+i]])))+
+                                       (arq[ ,dPe[i]])+
+                                       (arq[ ,dR[i]]))
+            Hm[,i]=aux
+            colnames(Hm)=c(paste('hm', seq(1:traits), sep=''))
+          }
+          #--------------------------------------------------------------------------------------#
+          effectG=nnzero(dG)
+          CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,]=aux
+          }
+          options(warn=0)
+          #--------------------------------------------------------------------------------------#
+          c2=matrix(NA, nrow=nrow(arq), ncol=traits)
+          for(i in 1:traits){
+            aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
+                                 (arq[ ,dG[traits+i]])+
+                                 (abs((arq[ ,mG[i,traits+i]])))+
+                                 (arq[ ,dPe[i]])+
+                                 (arq[ ,dR[i]]))
+            c2[,i]=aux
+            colnames(c2)=c(paste('c', seq(1:traits), sep=''))
+          }
         }
-        #--------------------------------------------------------------------------------------#
-        c2=matrix(NA, nrow=nrow(arq), ncol=traits)
-        for(i in 1:traits){
-          aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
-                               (arq[ ,dG[traits+i]])+
-                               (abs((arq[ ,mG[i,traits+i]])))+
-                               (arq[ ,dPe[i]])+
-                               (arq[ ,dR[i]]))
-          c2[,i]=aux
-          colnames(c2)=c(paste('c', seq(1:traits), sep=''))
-        }
-        #--------------------------------------------------------------------------------------#
-        effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
-        options(warn=-1)
-        for(i in 1:nrow(arq)){
-          aux=vec2sm(arq[i,dG[1]:rev(dG)[1]])
-          aux=cov2cor(aux)
-          aux=aux[lower.tri(aux)]
-          CorrG[i,]=aux
-        }
-        options(warn=0)
         #----------------------------------------------------------------------------------#
         vG=dG; vG[vG==0]=NA; vG=na.omit(vG); vG=data.frame(id=vG, comp=c(paste("Vga",seq(1:traits),sep=""), paste("Vgm",seq(1:traits),sep="")))
         vPe=dPe; vPe[vPe==0]=NA; vPe=na.omit(vPe); vPe=data.frame(id=vPe, comp=paste("Vmpe", seq(1:nrow(vPe)), sep=""))
@@ -1346,70 +1497,131 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
         dR=as.matrix(diag(mR))
         #--------------------------------------------------------------------------------------#
         Hapre=matrix(NA, nrow=nrow(arq), ncol=pre)
-        for(i in 1:pre){
-          aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
-                              (arq[ ,dG[traits+i]])+
-                              (abs((arq[ ,mG[i,traits+i]])))+
-                              (arq[ ,dPe[i]])+
-                              (arq[ ,dR[i]]))
-          Hapre[,i]=aux
-          colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
+        if(covAM==0){
+          for(i in 1:pre){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Hapre[,i]=aux
+            colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
+          }
+          if (post==0){post=pre} else {post=post}
+          Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
+          for(i in 1:post){
+            aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+
+                                    (arq[ ,dG[traits+pre+i]])+
+                                    (arq[ ,dR[pre+i]]))
+            Hapost[,i]=aux
+            colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
+          }
+          Ha=cbind(Hapre, Hapost)
+          Hmpre=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
+                                       (arq[ ,dG[traits+i]])+
+                                       (arq[ ,dPe[i]])+
+                                       (arq[ ,dR[i]]))
+            Hmpre[,i]=aux
+            colnames(Hmpre)=c(paste('Hmpre', seq(1:pre), sep=''))
+          }
+          Hmpost=matrix(NA, nrow=nrow(arq), ncol=post)
+          for(i in 1:post){
+            aux=arq[ ,dG[traits+pre+i]]/(arq[ ,dG[pre+i]]+
+                                           (arq[ ,dG[traits+pre+i]])+
+                                           (arq[ ,dR[pre+i]]))
+            Hmpost[,i]=aux
+            colnames(Hmpost)=c(paste('Hmpost', seq(1:post), sep=''))
+          }
+          Hm=cbind(Hmpre, Hmpost)
+          #---------------------------------------------------------------------------------------#
+          effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          CorrG = matrix(NA, nrow=nrow(arq), ncol=2*((effectG^2-effectG)/2))
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:dG[traits]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,1:length(aux)]=aux
+            aux=vec2sm(arq[i,dG[traits+1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,(length(aux)+1):ncol(CorrG)]=aux
+          }
+          options(warn=0)
+          #--------------------------------------------------------------------------------------#
+          c2=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
+                                 (arq[ ,dG[traits+i]])+
+                                 (arq[ ,dPe[i]])+
+                                 (arq[ ,dR[i]]))
+            c2[,i]=aux
+            colnames(c2)=c(paste('c', seq(1:pre), sep=''))
+          }
+        } else {
+          for(i in 1:pre){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (abs((arq[ ,mG[i,traits+i]])))+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Hapre[,i]=aux
+            colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
+          }
+          if (post==0){post=pre} else {post=post}
+          Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
+          for(i in 1:post){
+            aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+
+                                    (arq[ ,dG[traits+pre+i]])+
+                                    (abs(arq[ ,mG[pre+i,traits+pre+i]]))+
+                                    (arq[ ,dR[pre+i]]))
+            Hapost[,i]=aux
+            colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
+          }
+          Ha=cbind(Hapre, Hapost)
+          Hmpre=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
+                                       (arq[ ,dG[traits+i]])+
+                                       (abs((arq[ ,mG[i,traits+i]])))+
+                                       (arq[ ,dPe[i]])+
+                                       (arq[ ,dR[i]]))
+            Hmpre[,i]=aux
+            colnames(Hmpre)=c(paste('Hmpre', seq(1:pre), sep=''))
+          }
+          Hmpost=matrix(NA, nrow=nrow(arq), ncol=post)
+          for(i in 1:post){
+            aux=arq[ ,dG[traits+pre+i]]/(arq[ ,dG[pre+i]]+
+                                           (arq[ ,dG[traits+pre+i]])+
+                                           (abs(arq[ ,mG[pre+i,traits+pre+i]]))+
+                                           (arq[ ,dR[pre+i]]))
+            Hmpost[,i]=aux
+            colnames(Hmpost)=c(paste('Hmpost', seq(1:post), sep=''))
+          }
+          Hm=cbind(Hmpre, Hmpost)
+          #--------------------------------------------------------------------------------------#
+          effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,]=aux
+          }
+          options(warn=0)
+          #--------------------------------------------------------------------------------------#
+          c2=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
+                                 (arq[ ,dG[traits+i]])+
+                                 (abs((arq[ ,mG[i,traits+i]])))+
+                                 (arq[ ,dPe[i]])+
+                                 (arq[ ,dR[i]]))
+            c2[,i]=aux
+            colnames(c2)=c(paste('c', seq(1:pre), sep=''))
+          }
         }
-        #--------------------------------------------------------------------------------------#
-        if (post==0){post=pre} else {post=post}
-        Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
-        for(i in 1:post){
-          aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+
-                                  (arq[ ,dG[traits+pre+i]])+
-                                  (abs(arq[ ,mG[pre+i,traits+pre+i]]))+
-                                  (arq[ ,dR[pre+i]]))
-          Hapost[,i]=aux
-          colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
-        }
-        Ha=cbind(Hapre, Hapost)
-        #--------------------------------------------------------------------------------------#
-        Hmpre=matrix(NA, nrow=nrow(arq), ncol=pre)
-        for(i in 1:pre){
-          aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
-                                     (arq[ ,dG[traits+i]])+
-                                     (abs((arq[ ,mG[i,traits+i]])))+
-                                     (arq[ ,dPe[i]])+
-                                     (arq[ ,dR[i]]))
-          Hmpre[,i]=aux
-          colnames(Hmpre)=c(paste('Hmpre', seq(1:pre), sep=''))
-        }
-        #--------------------------------------------------------------------------------------#
-        Hmpost=matrix(NA, nrow=nrow(arq), ncol=post)
-        for(i in 1:post){
-          aux=arq[ ,dG[traits+pre+i]]/(arq[ ,dG[pre+i]]+
-                                         (arq[ ,dG[traits+pre+i]])+
-                                         (abs(arq[ ,mG[pre+i,traits+pre+i]]))+
-                                         (arq[ ,dR[pre+i]]))
-          Hmpost[,i]=aux
-          colnames(Hmpost)=c(paste('Hmpost', seq(1:post), sep=''))
-        }
-        Hm=cbind(Hmpre, Hmpost)
-        #--------------------------------------------------------------------------------------#
-        c2=matrix(NA, nrow=nrow(arq), ncol=pre)
-        for(i in 1:pre){
-          aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
-                               (arq[ ,dG[traits+i]])+
-                               (abs((arq[ ,mG[i,traits+i]])))+
-                               (arq[ ,dPe[i]])+
-                               (arq[ ,dR[i]]))
-          c2[,i]=aux
-          colnames(c2)=c(paste('c', seq(1:pre), sep=''))
-        }
-        #--------------------------------------------------------------------------------------#
-        effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
-        options(warn=-1)
-        for(i in 1:nrow(arq)){
-          aux=vec2sm(arq[i,dG[1]:rev(dG)[1]])
-          aux=cov2cor(aux)
-          aux=aux[lower.tri(aux)]
-          CorrG[i,]=aux
-        }
-        options(warn=0)
         #----------------------------------------------------------------------------------#
         vG=dG; vG[vG==0]=NA; vG=na.omit(vG); vG=data.frame(id=vG, comp=c(paste("Vga",seq(1:traits),sep=""), paste("Vgm",seq(1:traits),sep="")))
         vPe=dPe; vPe[vPe==0]=NA; vPe=na.omit(vPe); vPe=data.frame(id=vPe, comp=paste("Vmpe", seq(1:nrow(vPe)), sep=""))
@@ -1519,70 +1731,131 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
         dR=as.matrix(diag(mR))
         #--------------------------------------------------------------------------------------#
         Hapre=matrix(NA, nrow=nrow(arq), ncol=pre)
-        for(i in 1:pre){
-          aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
-                              (arq[ ,dG[traits+i]])+
-                              (abs((arq[ ,mG[i,traits+i]])))+
-                              (arq[ ,dPe[i]])+
-                              (arq[ ,dR[i]]))
-          Hapre[,i]=aux
-          colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
+        if(covAM==0){
+          for(i in 1:pre){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Hapre[,i]=aux
+            colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
+          }
+          if (post==0){post=pre} else {post=post}
+          Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
+          for(i in 1:post){
+            aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+
+                                    (arq[ ,dG[traits+pre+i]])+
+                                    (arq[ ,dR[pre+i]]))
+            Hapost[,i]=aux
+            colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
+          }
+          Ha=cbind(Hapre, Hapost)
+          Hmpre=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
+                                       (arq[ ,dG[traits+i]])+
+                                       (arq[ ,dPe[i]])+
+                                       (arq[ ,dR[i]]))
+            Hmpre[,i]=aux
+            colnames(Hmpre)=c(paste('Hmpre', seq(1:pre), sep=''))
+          }
+          Hmpost=matrix(NA, nrow=nrow(arq), ncol=post)
+          for(i in 1:post){
+            aux=arq[ ,dG[traits+pre+i]]/(arq[ ,dG[pre+i]]+
+                                           (arq[ ,dG[traits+pre+i]])+
+                                           (arq[ ,dR[pre+i]]))
+            Hmpost[,i]=aux
+            colnames(Hmpost)=c(paste('Hmpost', seq(1:post), sep=''))
+          }
+          Hm=cbind(Hmpre, Hmpost)
+          #---------------------------------------------------------------------------------------#
+          effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          CorrG = matrix(NA, nrow=nrow(arq), ncol=2*((effectG^2-effectG)/2))
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:dG[traits]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,1:length(aux)]=aux
+            aux=vec2sm(arq[i,dG[traits+1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,(length(aux)+1):ncol(CorrG)]=aux
+          }
+          options(warn=0)
+          #--------------------------------------------------------------------------------------#
+          c2=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
+                                 (arq[ ,dG[traits+i]])+
+                                 (arq[ ,dPe[i]])+
+                                 (arq[ ,dR[i]]))
+            c2[,i]=aux
+            colnames(c2)=c(paste('c', seq(1:pre), sep=''))
+          }
+        } else {
+          for(i in 1:pre){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (abs((arq[ ,mG[i,traits+i]])))+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Hapre[,i]=aux
+            colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
+          }
+          if (post==0){post=pre} else {post=post}
+          Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
+          for(i in 1:post){
+            aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+
+                                    (arq[ ,dG[traits+pre+i]])+
+                                    (abs(arq[ ,mG[pre+i,traits+pre+i]]))+
+                                    (arq[ ,dR[pre+i]]))
+            Hapost[,i]=aux
+            colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
+          }
+          Ha=cbind(Hapre, Hapost)
+          Hmpre=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
+                                       (arq[ ,dG[traits+i]])+
+                                       (abs((arq[ ,mG[i,traits+i]])))+
+                                       (arq[ ,dPe[i]])+
+                                       (arq[ ,dR[i]]))
+            Hmpre[,i]=aux
+            colnames(Hmpre)=c(paste('Hmpre', seq(1:pre), sep=''))
+          }
+          Hmpost=matrix(NA, nrow=nrow(arq), ncol=post)
+          for(i in 1:post){
+            aux=arq[ ,dG[traits+pre+i]]/(arq[ ,dG[pre+i]]+
+                                           (arq[ ,dG[traits+pre+i]])+
+                                           (abs(arq[ ,mG[pre+i,traits+pre+i]]))+
+                                           (arq[ ,dR[pre+i]]))
+            Hmpost[,i]=aux
+            colnames(Hmpost)=c(paste('Hmpost', seq(1:post), sep=''))
+          }
+          Hm=cbind(Hmpre, Hmpost)
+          #--------------------------------------------------------------------------------------#
+          effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,]=aux
+          }
+          options(warn=0)
+          #--------------------------------------------------------------------------------------#
+          c2=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
+                                 (arq[ ,dG[traits+i]])+
+                                 (abs((arq[ ,mG[i,traits+i]])))+
+                                 (arq[ ,dPe[i]])+
+                                 (arq[ ,dR[i]]))
+            c2[,i]=aux
+            colnames(c2)=c(paste('c', seq(1:pre), sep=''))
+          }
         }
-        #--------------------------------------------------------------------------------------#
-        if (post==0){post=pre} else {post=post}
-        Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
-        for(i in 1:post){
-          aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+
-                                  (arq[ ,dG[traits+pre+i]])+
-                                  (abs(arq[ ,mG[pre+i,traits+pre+i]]))+
-                                  (arq[ ,dR[pre+i]]))
-          Hapost[,i]=aux
-          colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
-        }
-        Ha=cbind(Hapre, Hapost)
-        #--------------------------------------------------------------------------------------#
-        Hmpre=matrix(NA, nrow=nrow(arq), ncol=pre)
-        for(i in 1:pre){
-          aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
-                                     (arq[ ,dG[traits+i]])+
-                                     (abs((arq[ ,mG[i,traits+i]])))+
-                                     (arq[ ,dPe[i]])+
-                                     (arq[ ,dR[i]]))
-          Hmpre[,i]=aux
-          colnames(Hmpre)=c(paste('Hmpre', seq(1:pre), sep=''))
-        }
-        #--------------------------------------------------------------------------------------#
-        Hmpost=matrix(NA, nrow=nrow(arq), ncol=post)
-        for(i in 1:post){
-          aux=arq[ ,dG[traits+pre+i]]/(arq[ ,dG[pre+i]]+
-                                         (arq[ ,dG[traits+pre+i]])+
-                                         (abs(arq[ ,mG[pre+i,traits+pre+i]]))+
-                                         (arq[ ,dR[pre+i]]))
-          Hmpost[,i]=aux
-          colnames(Hmpost)=c(paste('Hmpost', seq(1:post), sep=''))
-        }
-        Hm=cbind(Hmpre, Hmpost)
-        #--------------------------------------------------------------------------------------#
-        c2=matrix(NA, nrow=nrow(arq), ncol=pre)
-        for(i in 1:pre){
-          aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
-                               (arq[ ,dG[traits+i]])+
-                               (abs((arq[ ,mG[i,traits+i]])))+
-                               (arq[ ,dPe[i]])+
-                               (arq[ ,dR[i]]))
-          c2[,i]=aux
-          colnames(c2)=c(paste('c', seq(1:pre), sep=''))
-        }
-        #--------------------------------------------------------------------------------------#
-        effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
-        options(warn=-1)
-        for(i in 1:nrow(arq)){
-          aux=vec2sm(arq[i,dG[1]:rev(dG)[1]])
-          aux=cov2cor(aux)
-          aux=aux[lower.tri(aux)]
-          CorrG[i,]=aux
-        }
-        options(warn=0)
         #----------------------------------------------------------------------------------#
         vG=dG; vG[vG==0]=NA; vG=na.omit(vG); vG=data.frame(id=vG, comp=c(paste("Vga",seq(1:traits),sep=""), paste("Vgm",seq(1:traits),sep="")))
         vPe=dPe; vPe[vPe==0]=NA; vPe=na.omit(vPe); vPe=data.frame(id=vPe, comp=paste("Vmpe", seq(1:nrow(vPe)), sep=""))
@@ -1693,52 +1966,104 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
         dR=as.matrix(diag(mR))
         #----------------------------------------------------------------------------------#
         Hapre=matrix(NA, nrow=nrow(arq), ncol=pre)
-        for(i in 1:pre){
-          aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
-                              (arq[ ,dG[traits+i]])+
-                              (abs((arq[ ,mG[i,traits+i]])))+
-                              (arq[ ,dPe[i]])+
-                              (arq[ ,dR[i]]))
-          Hapre[,i]=aux
-          colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
-        }
-        #----------------------------------------------------------------------------------#
-        Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
-        for(i in 1:post){
-          aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+(arq[ ,dR[pre+i]]))
-          Hapost[,i]=aux
-          colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
-        }
-        Ha=cbind(Hapre, Hapost)
-        #----------------------------------------------------------------------------------#
-        Hm=matrix(NA, nrow=nrow(arq), ncol=pre)
-        for(i in 1:pre){
-          aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
-                                     (arq[ ,dG[traits+i]])+
-                                     (abs((arq[ ,mG[i,traits+i]])))+
-                                     (arq[ ,dPe[i]])+
-                                     (arq[ ,dR[i]]))
-          Hm[,i]=aux
-          colnames(Hm)=c(paste('hm', seq(1:pre), sep=''))
-        }
-        #----------------------------------------------------------------------------------#
-        c2=matrix(NA, nrow=nrow(arq), ncol=pre)
-        for(i in 1:pre){
-          aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
-                               (arq[ ,dG[traits+i]])+
-                               (abs((arq[ ,mG[i,traits+i]])))+
-                               (arq[ ,dPe[i]])+
-                               (arq[ ,dR[i]]))
-          c2[,i]=aux
-          colnames(c2)=c(paste('c', seq(1:pre), sep=''))
-        }
-        #----------------------------------------------------------------------------------#
-        effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
-        for(i in 1:nrow(arq)){
-          aux=vec2sm(arq[i,dG[1]:rev(dG)[post+1]])
-          aux=cov2cor(aux)
-          aux=aux[lower.tri(aux)]
-          CorrG[i,]=aux
+        if(covAM==0){
+          for(i in 1:pre){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Hapre[,i]=aux
+            colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
+          }
+          Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
+          for(i in 1:post){
+            aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+(arq[ ,dR[pre+i]]))
+            Hapost[,i]=aux
+            colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
+          }
+          Ha=cbind(Hapre, Hapost)
+          #----------------------------------------------------------------------------------#
+          Hm=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
+                                       (arq[ ,dG[traits+i]])+
+                                       (arq[ ,dPe[i]])+
+                                       (arq[ ,dR[i]]))
+            Hm[,i]=aux
+            colnames(Hm)=c(paste('hm', seq(1:pre), sep=''))
+          }
+          #---------------------------------------------------------------------------------------#
+          effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          CorrG = matrix(NA, nrow=nrow(arq), ncol=2*((effectG^2-effectG)/2))
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:dG[traits]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,1:length(aux)]=aux
+            aux=vec2sm(arq[i,dG[traits+1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,(length(aux)+1):ncol(CorrG)]=aux
+          }
+          options(warn=0)
+          #----------------------------------------------------------------------------------#
+          c2=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
+                                 (arq[ ,dG[traits+i]])+
+                                 (arq[ ,dPe[i]])+
+                                 (arq[ ,dR[i]]))
+            c2[,i]=aux
+            colnames(c2)=c(paste('c', seq(1:pre), sep=''))
+          }
+        } else {
+          for(i in 1:pre){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (abs((arq[ ,mG[i,traits+i]])))+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Hapre[,i]=aux
+            colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
+          }
+          Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
+          for(i in 1:post){
+            aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+(arq[ ,dR[pre+i]]))
+            Hapost[,i]=aux
+            colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
+          }
+          Ha=cbind(Hapre, Hapost)
+          #----------------------------------------------------------------------------------#
+          Hm=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
+                                       (arq[ ,dG[traits+i]])+
+                                       (abs((arq[ ,mG[i,traits+i]])))+
+                                       (arq[ ,dPe[i]])+
+                                       (arq[ ,dR[i]]))
+            Hm[,i]=aux
+            colnames(Hm)=c(paste('hm', seq(1:pre), sep=''))
+          }
+          #----------------------------------------------------------------------------------#
+          effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:rev(dG)[post+1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,]=aux
+          }
+          #----------------------------------------------------------------------------------#
+          c2=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
+                                 (arq[ ,dG[traits+i]])+
+                                 (abs((arq[ ,mG[i,traits+i]])))+
+                                 (arq[ ,dPe[i]])+
+                                 (arq[ ,dR[i]]))
+            c2[,i]=aux
+            colnames(c2)=c(paste('c', seq(1:pre), sep=''))
+          }
         }
         #----------------------------------------------------------------------------------#
         vG=dG; vG[vG==0]=NA; vG=na.omit(vG); vG=data.frame(id=vG, comp=c(paste("Vga",seq(1:traits),sep=""), paste("Vgm",seq(1:pre),sep="")))
@@ -1856,52 +2181,105 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
         dR=as.matrix(diag(mR))
         #----------------------------------------------------------------------------------#
         Hapre=matrix(NA, nrow=nrow(arq), ncol=pre)
-        for(i in 1:pre){
-          aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
-                              (arq[ ,dG[traits+i]])+
-                              (abs((arq[ ,mG[i,traits+i]])))+
-                              (arq[ ,dPe[i]])+
-                              (arq[ ,dR[i]]))
-          Hapre[,i]=aux
-          colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
-        }
-        #----------------------------------------------------------------------------------#
-        Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
-        for(i in 1:post){
-          aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+(arq[ ,dR[pre+i]]))
-          Hapost[,i]=aux
-          colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
-        }
-        Ha=cbind(Hapre, Hapost)
-        #----------------------------------------------------------------------------------#
-        Hm=matrix(NA, nrow=nrow(arq), ncol=pre)
-        for(i in 1:pre){
-          aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
-                                     (arq[ ,dG[traits+i]])+
-                                     (abs((arq[ ,mG[i,traits+i]])))+
-                                     (arq[ ,dPe[i]])+
-                                     (arq[ ,dR[i]]))
-          Hm[,i]=aux
-          colnames(Hm)=c(paste('hm', seq(1:pre), sep=''))
-        }
-        #----------------------------------------------------------------------------------#
-        c2=matrix(NA, nrow=nrow(arq), ncol=pre)
-        for(i in 1:pre){
-          aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
-                               (arq[ ,dG[traits+i]])+
-                               (abs((arq[ ,mG[i,traits+i]])))+
-                               (arq[ ,dPe[i]])+
-                               (arq[ ,dR[i]]))
-          c2[,i]=aux
-          colnames(c2)=c(paste('c', seq(1:pre), sep=''))
-        }
-        #----------------------------------------------------------------------------------#
-        effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
-        for(i in 1:nrow(arq)){
-          aux=vec2sm(arq[i,dG[1]:rev(dG)[post+1]])
-          aux=cov2cor(aux)
-          aux=aux[lower.tri(aux)]
-          CorrG[i,]=aux
+        if(covAM==0){
+          for(i in 1:pre){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (abs((arq[ ,mG[i,traits+i]])))+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Hapre[,i]=aux
+            colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
+          }
+          Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
+          for(i in 1:post){
+            aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+(arq[ ,dR[pre+i]]))
+            Hapost[,i]=aux
+            colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
+          }
+          Ha=cbind(Hapre, Hapost)
+          #----------------------------------------------------------------------------------#
+          Hm=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
+                                       (arq[ ,dG[traits+i]])+
+                                       (arq[ ,dPe[i]])+
+                                       (arq[ ,dR[i]]))
+            Hm[,i]=aux
+            colnames(Hm)=c(paste('hm', seq(1:pre), sep=''))
+          }
+          #---------------------------------------------------------------------------------------#
+          effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          CorrG = matrix(NA, nrow=nrow(arq), ncol=2*((effectG^2-effectG)/2))
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:dG[traits]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,1:length(aux)]=aux
+            aux=vec2sm(arq[i,dG[traits+1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,(length(aux)+1):ncol(CorrG)]=aux
+          }
+          options(warn=0)
+          #----------------------------------------------------------------------------------#
+          c2=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
+                                 (arq[ ,dG[traits+i]])+
+                                 (arq[ ,dPe[i]])+
+                                 (arq[ ,dR[i]]))
+            c2[,i]=aux
+            colnames(c2)=c(paste('c', seq(1:pre), sep=''))
+          }
+        } else {
+          for(i in 1:pre){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (abs((arq[ ,mG[i,traits+i]])))+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Hapre[,i]=aux
+            colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
+          }
+          Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
+          for(i in 1:post){
+            aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+(arq[ ,dR[pre+i]]))
+            Hapost[,i]=aux
+            colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
+          }
+          Ha=cbind(Hapre, Hapost)
+          #----------------------------------------------------------------------------------#
+          Hm=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
+                                       (arq[ ,dG[traits+i]])+
+                                       (abs((arq[ ,mG[i,traits+i]])))+
+                                       (arq[ ,dPe[i]])+
+                                       (arq[ ,dR[i]]))
+            Hm[,i]=aux
+            colnames(Hm)=c(paste('hm', seq(1:pre), sep=''))
+          }
+          #----------------------------------------------------------------------------------#
+          effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:rev(dG)[post+1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,]=aux
+          }
+          #----------------------------------------------------------------------------------#
+          c2=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
+                                 (arq[ ,dG[traits+i]])+
+                                 (abs((arq[ ,mG[i,traits+i]])))+
+                                 (arq[ ,dPe[i]])+
+                                 (arq[ ,dR[i]]))
+            c2[,i]=aux
+            colnames(c2)=c(paste('c', seq(1:pre), sep=''))
+          }
         }
         #----------------------------------------------------------------------------------#
         vG=dG; vG[vG==0]=NA; vG=na.omit(vG); vG=data.frame(id=vG, comp=c(paste("Vga",seq(1:traits),sep=""), paste("Vgm",seq(1:pre),sep="")))
@@ -1999,44 +2377,88 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
         dPe=as.matrix(diag(mPe))
         dR=as.matrix(diag(mR))
         Ha=matrix(NA, nrow=nrow(arq), ncol=traits)
-        for(i in 1:traits){
-          aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
-                              (arq[ ,dG[traits+i]])+
-                              (abs((arq[ ,mG[i,traits+i]])))+
-                              (arq[ ,dPe[i]])+
-                              (arq[ ,dR[i]]))
-          Ha[,i]=aux
-          colnames(Ha)=c(paste('ha', seq(1:traits), sep=''))
+        if(covAM==0){
+          for(i in 1:traits){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Ha[,i]=aux
+            colnames(Ha)=c(paste('ha', seq(1:traits), sep=''))
+          }
+          Hm=matrix(NA, nrow=nrow(arq), ncol=traits)
+          for(i in 1:traits){
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
+                                       (arq[ ,dG[traits+i]])+
+                                       (arq[ ,dPe[i]])+
+                                       (arq[ ,dR[i]]))
+            Hm[,i]=aux
+            colnames(Hm)=c(paste('hm', seq(1:traits), sep=''))
+          }
+          #---------------------------------------------------------------------------------------#
+          effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          CorrG = matrix(NA, nrow=nrow(arq), ncol=2*((effectG^2-effectG)/2))
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:dG[traits]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,1:length(aux)]=aux
+            aux=vec2sm(arq[i,dG[traits+1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,(length(aux)+1):ncol(CorrG)]=aux
+          }
+          options(warn=0)
+          c2=matrix(NA, nrow=nrow(arq), ncol=traits)
+          for(i in 1:traits){
+            aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
+                                 (arq[ ,dG[traits+i]])+
+                                 (arq[ ,dPe[i]])+
+                                 (arq[ ,dR[i]]))
+            c2[,i]=aux
+            colnames(c2)=c(paste('c', seq(1:traits), sep=''))
+          }
+        } else {
+          for(i in 1:traits){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (abs((arq[ ,mG[i,traits+i]])))+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Ha[,i]=aux
+            colnames(Ha)=c(paste('ha', seq(1:traits), sep=''))
+          }
+          Hm=matrix(NA, nrow=nrow(arq), ncol=traits)
+          for(i in 1:traits){
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
+                                       (arq[ ,dG[traits+i]])+
+                                       (abs((arq[ ,mG[i,traits+i]])))+
+                                       (arq[ ,dPe[i]])+
+                                       (arq[ ,dR[i]]))
+            Hm[,i]=aux
+            colnames(Hm)=c(paste('hm', seq(1:traits), sep=''))
+          }
+          effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,]=aux
+          }
+          options(warn=0)
+          c2=matrix(NA, nrow=nrow(arq), ncol=traits)
+          for(i in 1:traits){
+            aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
+                                 (arq[ ,dG[traits+i]])+
+                                 (abs((arq[ ,mG[i,traits+i]])))+
+                                 (arq[ ,dPe[i]])+
+                                 (arq[ ,dR[i]]))
+            c2[,i]=aux
+            colnames(c2)=c(paste('c', seq(1:traits), sep=''))
+          }
         }
-        Hm=matrix(NA, nrow=nrow(arq), ncol=traits)
-        for(i in 1:traits){
-          aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
-                                     (arq[ ,dG[traits+i]])+
-                                     (abs((arq[ ,mG[i,traits+i]])))+
-                                     (arq[ ,dPe[i]])+
-                                     (arq[ ,dR[i]]))
-          Hm[,i]=aux
-          colnames(Hm)=c(paste('hm', seq(1:traits), sep=''))
-        }
-        c2=matrix(NA, nrow=nrow(arq), ncol=traits)
-        for(i in 1:traits){
-          aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
-                               (arq[ ,dG[traits+i]])+
-                               (abs((arq[ ,mG[i,traits+i]])))+
-                               (arq[ ,dPe[i]])+
-                               (arq[ ,dR[i]]))
-          c2[,i]=aux
-          colnames(c2)=c(paste('c', seq(1:traits), sep=''))
-        }
-        effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
-        options(warn=-1)
-        for(i in 1:nrow(arq)){
-          aux=vec2sm(arq[i,dG[1]:rev(dG)[1]])
-          aux=cov2cor(aux)
-          aux=aux[lower.tri(aux)]
-          CorrG[i,]=aux
-        }
-        options(warn=0)
         #----------------------------------------------------------------------------------#
         vG=dG; vG[vG==0]=NA; vG=na.omit(vG); vG=data.frame(id=vG, comp=c(paste("Vga",seq(1:traits),sep=""), paste("Vgm",seq(1:traits),sep="")))
         vPe=dPe; vPe[vPe==0]=NA; vPe=na.omit(vPe); vPe=data.frame(id=vPe, comp=paste("Vmpe", seq(1:nrow(vPe)), sep=""))
@@ -2115,70 +2537,137 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
         if (post==0){pre=traits/2} else {pre=traits-post}
         #--------------------------------------------------------------------------------------#
         Hapre=matrix(NA, nrow=nrow(arq), ncol=pre)
-        for(i in 1:pre){
-          aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
-                              (arq[ ,dG[traits+i]])+
-                              (abs((arq[ ,mG[i,traits+i]])))+
-                              (arq[ ,dPe[i]])+
-                              (arq[ ,dR[i]]))
-          Hapre[,i]=aux
-          colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
+        if(covAM==0){
+          for(i in 1:pre){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Hapre[,i]=aux
+            colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
+          }
+          #--------------------------------------------------------------------------------------#
+          if (post==0){post=pre} else {post=post}
+          Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
+          for(i in 1:post){
+            aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+
+                                    (arq[ ,dG[traits+pre+i]])+
+                                    (arq[ ,dR[pre+i]]))
+            Hapost[,i]=aux
+            colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
+          }
+          Ha=cbind(Hapre, Hapost)
+          #--------------------------------------------------------------------------------------#
+          Hmpre=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
+                                       (arq[ ,dG[traits+i]])+
+                                       (arq[ ,dPe[i]])+
+                                       (arq[ ,dR[i]]))
+            Hmpre[,i]=aux
+            colnames(Hmpre)=c(paste('Hmpre', seq(1:pre), sep=''))
+          }
+          #--------------------------------------------------------------------------------------#
+          Hmpost=matrix(NA, nrow=nrow(arq), ncol=post)
+          for(i in 1:post){
+            aux=arq[ ,dG[traits+pre+i]]/(arq[ ,dG[pre+i]]+
+                                           (arq[ ,dG[traits+pre+i]])+
+                                           (arq[ ,dR[pre+i]]))
+            Hmpost[,i]=aux
+            colnames(Hmpost)=c(paste('Hmpost', seq(1:post), sep=''))
+          }
+          Hm=cbind(Hmpre, Hmpost)
+          #---------------------------------------------------------------------------------------#
+          effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          CorrG = matrix(NA, nrow=nrow(arq), ncol=2*((effectG^2-effectG)/2))
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:dG[traits]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,1:length(aux)]=aux
+            aux=vec2sm(arq[i,dG[traits+1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,(length(aux)+1):ncol(CorrG)]=aux
+          }
+          options(warn=0)
+          #--------------------------------------------------------------------------------------#
+          c2=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
+                                 (arq[ ,dG[traits+i]])+
+                                 (arq[ ,dPe[i]])+
+                                 (arq[ ,dR[i]]))
+            c2[,i]=aux
+            colnames(c2)=c(paste('c', seq(1:pre), sep=''))
+          }
+        } else {
+          for(i in 1:pre){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (abs((arq[ ,mG[i,traits+i]])))+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Hapre[,i]=aux
+            colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
+          }
+          #--------------------------------------------------------------------------------------#
+          if (post==0){post=pre} else {post=post}
+          Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
+          for(i in 1:post){
+            aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+
+                                    (arq[ ,dG[traits+pre+i]])+
+                                    (abs(arq[ ,mG[pre+i,traits+pre+i]]))+
+                                    (arq[ ,dR[pre+i]]))
+            Hapost[,i]=aux
+            colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
+          }
+          Ha=cbind(Hapre, Hapost)
+          #--------------------------------------------------------------------------------------#
+          Hmpre=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
+                                       (arq[ ,dG[traits+i]])+
+                                       (abs((arq[ ,mG[i,traits+i]])))+
+                                       (arq[ ,dPe[i]])+
+                                       (arq[ ,dR[i]]))
+            Hmpre[,i]=aux
+            colnames(Hmpre)=c(paste('Hmpre', seq(1:pre), sep=''))
+          }
+          #--------------------------------------------------------------------------------------#
+          Hmpost=matrix(NA, nrow=nrow(arq), ncol=post)
+          for(i in 1:post){
+            aux=arq[ ,dG[traits+pre+i]]/(arq[ ,dG[pre+i]]+
+                                           (arq[ ,dG[traits+pre+i]])+
+                                           (abs(arq[ ,mG[pre+i,traits+pre+i]]))+
+                                           (arq[ ,dR[pre+i]]))
+            Hmpost[,i]=aux
+            colnames(Hmpost)=c(paste('Hmpost', seq(1:post), sep=''))
+          }
+          Hm=cbind(Hmpre, Hmpost)
+          #--------------------------------------------------------------------------------------#
+          effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,]=aux
+          }
+          options(warn=0)
+          #--------------------------------------------------------------------------------------#
+          c2=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
+                                 (arq[ ,dG[traits+i]])+
+                                 (abs((arq[ ,mG[i,traits+i]])))+
+                                 (arq[ ,dPe[i]])+
+                                 (arq[ ,dR[i]]))
+            c2[,i]=aux
+            colnames(c2)=c(paste('c', seq(1:pre), sep=''))
+          }
         }
-        #--------------------------------------------------------------------------------------#
-        if (post==0){post=pre} else {post=post}
-        Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
-        for(i in 1:post){
-          aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+
-                                  (arq[ ,dG[traits+pre+i]])+
-                                  (abs(arq[ ,mG[pre+i,traits+pre+i]]))+
-                                  (arq[ ,dR[pre+i]]))
-          Hapost[,i]=aux
-          colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
-        }
-        Ha=cbind(Hapre, Hapost)
-        #--------------------------------------------------------------------------------------#
-        Hmpre=matrix(NA, nrow=nrow(arq), ncol=pre)
-        for(i in 1:pre){
-          aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
-                                     (arq[ ,dG[traits+i]])+
-                                     (abs((arq[ ,mG[i,traits+i]])))+
-                                     (arq[ ,dPe[i]])+
-                                     (arq[ ,dR[i]]))
-          Hmpre[,i]=aux
-          colnames(Hmpre)=c(paste('Hmpre', seq(1:pre), sep=''))
-        }
-        #--------------------------------------------------------------------------------------#
-        Hmpost=matrix(NA, nrow=nrow(arq), ncol=post)
-        for(i in 1:post){
-          aux=arq[ ,dG[traits+pre+i]]/(arq[ ,dG[pre+i]]+
-                                         (arq[ ,dG[traits+pre+i]])+
-                                         (abs(arq[ ,mG[pre+i,traits+pre+i]]))+
-                                         (arq[ ,dR[pre+i]]))
-          Hmpost[,i]=aux
-          colnames(Hmpost)=c(paste('Hmpost', seq(1:post), sep=''))
-        }
-        Hm=cbind(Hmpre, Hmpost)
-        #--------------------------------------------------------------------------------------#
-        c2=matrix(NA, nrow=nrow(arq), ncol=pre)
-        for(i in 1:pre){
-          aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
-                               (arq[ ,dG[traits+i]])+
-                               (abs((arq[ ,mG[i,traits+i]])))+
-                               (arq[ ,dPe[i]])+
-                               (arq[ ,dR[i]]))
-          c2[,i]=aux
-          colnames(c2)=c(paste('c', seq(1:pre), sep=''))
-        }
-        #--------------------------------------------------------------------------------------#
-        effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
-        options(warn=-1)
-        for(i in 1:nrow(arq)){
-          aux=vec2sm(arq[i,dG[1]:rev(dG)[1]])
-          aux=cov2cor(aux)
-          aux=aux[lower.tri(aux)]
-          CorrG[i,]=aux
-        }
-        options(warn=0)
         #----------------------------------------------------------------------------------#
         vG=dG; vG[vG==0]=NA; vG=na.omit(vG); vG=data.frame(id=vG, comp=c(paste("Vga",seq(1:traits),sep=""), paste("Vgm",seq(1:traits),sep="")))
         vPe=dPe; vPe[vPe==0]=NA; vPe=na.omit(vPe); vPe=data.frame(id=vPe, comp=paste("Vmpe", seq(1:nrow(vPe)), sep=""))
@@ -2257,70 +2746,137 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
         if (post==0){pre=traits/2} else {pre=traits-post}
         #--------------------------------------------------------------------------------------#
         Hapre=matrix(NA, nrow=nrow(arq), ncol=pre)
-        for(i in 1:pre){
-          aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
-                              (arq[ ,dG[traits+i]])+
-                              (abs((arq[ ,mG[i,traits+i]])))+
-                              (arq[ ,dPe[i]])+
-                              (arq[ ,dR[i]]))
-          Hapre[,i]=aux
-          colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
+        if(covAM==0){
+          for(i in 1:pre){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Hapre[,i]=aux
+            colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
+          }
+          #--------------------------------------------------------------------------------------#
+          if (post==0){post=pre} else {post=post}
+          Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
+          for(i in 1:post){
+            aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+
+                                    (arq[ ,dG[traits+pre+i]])+
+                                    (arq[ ,dR[pre+i]]))
+            Hapost[,i]=aux
+            colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
+          }
+          Ha=cbind(Hapre, Hapost)
+          #--------------------------------------------------------------------------------------#
+          Hmpre=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
+                                       (arq[ ,dG[traits+i]])+
+                                       (arq[ ,dPe[i]])+
+                                       (arq[ ,dR[i]]))
+            Hmpre[,i]=aux
+            colnames(Hmpre)=c(paste('Hmpre', seq(1:pre), sep=''))
+          }
+          #--------------------------------------------------------------------------------------#
+          Hmpost=matrix(NA, nrow=nrow(arq), ncol=post)
+          for(i in 1:post){
+            aux=arq[ ,dG[traits+pre+i]]/(arq[ ,dG[pre+i]]+
+                                           (arq[ ,dG[traits+pre+i]])+
+                                           (arq[ ,dR[pre+i]]))
+            Hmpost[,i]=aux
+            colnames(Hmpost)=c(paste('Hmpost', seq(1:post), sep=''))
+          }
+          Hm=cbind(Hmpre, Hmpost)
+          #---------------------------------------------------------------------------------------#
+          effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          CorrG = matrix(NA, nrow=nrow(arq), ncol=2*((effectG^2-effectG)/2))
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:dG[traits]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,1:length(aux)]=aux
+            aux=vec2sm(arq[i,dG[traits+1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,(length(aux)+1):ncol(CorrG)]=aux
+          }
+          options(warn=0)
+          #--------------------------------------------------------------------------------------#
+          c2=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
+                                 (arq[ ,dG[traits+i]])+
+                                 (arq[ ,dPe[i]])+
+                                 (arq[ ,dR[i]]))
+            c2[,i]=aux
+            colnames(c2)=c(paste('c', seq(1:pre), sep=''))
+          }
+        } else {
+          for(i in 1:pre){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (abs((arq[ ,mG[i,traits+i]])))+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Hapre[,i]=aux
+            colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
+          }
+          #--------------------------------------------------------------------------------------#
+          if (post==0){post=pre} else {post=post}
+          Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
+          for(i in 1:post){
+            aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+
+                                    (arq[ ,dG[traits+pre+i]])+
+                                    (abs(arq[ ,mG[pre+i,traits+pre+i]]))+
+                                    (arq[ ,dR[pre+i]]))
+            Hapost[,i]=aux
+            colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
+          }
+          Ha=cbind(Hapre, Hapost)
+          #--------------------------------------------------------------------------------------#
+          Hmpre=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
+                                       (arq[ ,dG[traits+i]])+
+                                       (abs((arq[ ,mG[i,traits+i]])))+
+                                       (arq[ ,dPe[i]])+
+                                       (arq[ ,dR[i]]))
+            Hmpre[,i]=aux
+            colnames(Hmpre)=c(paste('Hmpre', seq(1:pre), sep=''))
+          }
+          #--------------------------------------------------------------------------------------#
+          Hmpost=matrix(NA, nrow=nrow(arq), ncol=post)
+          for(i in 1:post){
+            aux=arq[ ,dG[traits+pre+i]]/(arq[ ,dG[pre+i]]+
+                                           (arq[ ,dG[traits+pre+i]])+
+                                           (abs(arq[ ,mG[pre+i,traits+pre+i]]))+
+                                           (arq[ ,dR[pre+i]]))
+            Hmpost[,i]=aux
+            colnames(Hmpost)=c(paste('Hmpost', seq(1:post), sep=''))
+          }
+          Hm=cbind(Hmpre, Hmpost)
+          #--------------------------------------------------------------------------------------#
+          effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,]=aux
+          }
+          options(warn=0)
+          #--------------------------------------------------------------------------------------#
+          c2=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
+                                 (arq[ ,dG[traits+i]])+
+                                 (abs((arq[ ,mG[i,traits+i]])))+
+                                 (arq[ ,dPe[i]])+
+                                 (arq[ ,dR[i]]))
+            c2[,i]=aux
+            colnames(c2)=c(paste('c', seq(1:pre), sep=''))
+          }
         }
-        #--------------------------------------------------------------------------------------#
-        if (post==0){post=pre} else {post=post}
-        Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
-        for(i in 1:post){
-          aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+
-                                  (arq[ ,dG[traits+pre+i]])+
-                                  (abs(arq[ ,mG[pre+i,traits+pre+i]]))+
-                                  (arq[ ,dR[pre+i]]))
-          Hapost[,i]=aux
-          colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
-        }
-        Ha=cbind(Hapre, Hapost)
-        #--------------------------------------------------------------------------------------#
-        Hmpre=matrix(NA, nrow=nrow(arq), ncol=pre)
-        for(i in 1:pre){
-          aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
-                                     (arq[ ,dG[traits+i]])+
-                                     (abs((arq[ ,mG[i,traits+i]])))+
-                                     (arq[ ,dPe[i]])+
-                                     (arq[ ,dR[i]]))
-          Hmpre[,i]=aux
-          colnames(Hmpre)=c(paste('Hmpre', seq(1:pre), sep=''))
-        }
-        #--------------------------------------------------------------------------------------#
-        Hmpost=matrix(NA, nrow=nrow(arq), ncol=post)
-        for(i in 1:post){
-          aux=arq[ ,dG[traits+pre+i]]/(arq[ ,dG[pre+i]]+
-                                         (arq[ ,dG[traits+pre+i]])+
-                                         (abs(arq[ ,mG[pre+i,traits+pre+i]]))+
-                                         (arq[ ,dR[pre+i]]))
-          Hmpost[,i]=aux
-          colnames(Hmpost)=c(paste('Hmpost', seq(1:post), sep=''))
-        }
-        Hm=cbind(Hmpre, Hmpost)
-        #--------------------------------------------------------------------------------------#
-        c2=matrix(NA, nrow=nrow(arq), ncol=pre)
-        for(i in 1:pre){
-          aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
-                               (arq[ ,dG[traits+i]])+
-                               (abs((arq[ ,mG[i,traits+i]])))+
-                               (arq[ ,dPe[i]])+
-                               (arq[ ,dR[i]]))
-          c2[,i]=aux
-          colnames(c2)=c(paste('c', seq(1:pre), sep=''))
-        }
-        #--------------------------------------------------------------------------------------#
-        effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
-        options(warn=-1)
-        for(i in 1:nrow(arq)){
-          aux=vec2sm(arq[i,dG[1]:rev(dG)[1]])
-          aux=cov2cor(aux)
-          aux=aux[lower.tri(aux)]
-          CorrG[i,]=aux
-        }
-        options(warn=0)
         #----------------------------------------------------------------------------------#
         vG=dG; vG[vG==0]=NA; vG=na.omit(vG); vG=data.frame(id=vG, comp=c(paste("Vga",seq(1:traits),sep=""), paste("Vgm",seq(1:traits),sep="")))
         vPe=dPe; vPe[vPe==0]=NA; vPe=na.omit(vPe); vPe=data.frame(id=vPe, comp=paste("Vmpe", seq(1:nrow(vPe)), sep=""))
@@ -2400,57 +2956,113 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
         dR=as.matrix(diag(mR))
         #----------------------------------------------------------------------------------#
         Hapre=matrix(NA, nrow=nrow(arq), ncol=pre)
-        for(i in 1:pre){
-          aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
-                              (arq[ ,dG[traits+i]])+
-                              (abs((arq[ ,mG[i,traits+i]])))+
-                              (arq[ ,dPe[i]])+
-                              (arq[ ,dR[i]]))
-          Hapre[,i]=aux
-          colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
+        if(covAM==0){
+          for(i in 1:pre){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Hapre[,i]=aux
+            colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
+          }
+          #----------------------------------------------------------------------------------#
+          if (post==0){post=pre} else {post=post}
+          Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
+          for(i in 1:post){
+            aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+(arq[ ,dR[pre+i]]))
+            Hapost[,i]=aux
+            colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
+          }
+          Ha=cbind(Hapre, Hapost)
+          #----------------------------------------------------------------------------------#
+          Hmpre=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
+                                       (arq[ ,dG[traits+i]])+
+                                       (arq[ ,dPe[i]])+
+                                       (arq[ ,dR[i]]))
+            Hmpre[,i]=aux
+            colnames(Hmpre)=c(paste('Hmpre', seq(1:pre), sep=''))
+          }
+          Hm=Hmpre
+          #---------------------------------------------------------------------------------------#
+          effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          CorrG = matrix(NA, nrow=nrow(arq), ncol=2*((effectG^2-effectG)/2))
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:dG[traits]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,1:length(aux)]=aux
+            aux=vec2sm(arq[i,dG[traits+1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,(length(aux)+1):ncol(CorrG)]=aux
+          }
+          options(warn=0)
+          #----------------------------------------------------------------------------------#
+          c2=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
+                                 (arq[ ,dG[traits+i]])+
+                                 (arq[ ,dPe[i]])+
+                                 (arq[ ,dR[i]]))
+            c2[,i]=aux
+            colnames(c2)=c(paste('c', seq(1:pre), sep=''))
+          }
+        } else {
+          for(i in 1:pre){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (abs((arq[ ,mG[i,traits+i]])))+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Hapre[,i]=aux
+            colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
+          }
+          #----------------------------------------------------------------------------------#
+          if (post==0){post=pre} else {post=post}
+          Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
+          for(i in 1:post){
+            aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+(arq[ ,dR[pre+i]]))
+            Hapost[,i]=aux
+            colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
+          }
+          Ha=cbind(Hapre, Hapost)
+          #----------------------------------------------------------------------------------#
+          Hmpre=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
+                                       (arq[ ,dG[traits+i]])+
+                                       (abs((arq[ ,mG[i,traits+i]])))+
+                                       (arq[ ,dPe[i]])+
+                                       (arq[ ,dR[i]]))
+            Hmpre[,i]=aux
+            colnames(Hmpre)=c(paste('Hmpre', seq(1:pre), sep=''))
+          }
+          Hm=Hmpre
+          #----------------------------------------------------------------------------------#
+          effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:rev(dG[1:traits+pre, ])[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,]=aux
+          }
+          options(warn=0)
+          #----------------------------------------------------------------------------------#
+          c2=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
+                                 (arq[ ,dG[traits+i]])+
+                                 (abs((arq[ ,mG[i,traits+i]])))+
+                                 (arq[ ,dPe[i]])+
+                                 (arq[ ,dR[i]]))
+            c2[,i]=aux
+            colnames(c2)=c(paste('c', seq(1:pre), sep=''))
+          }
         }
-        #----------------------------------------------------------------------------------#
-        if (post==0){post=pre} else {post=post}
-        Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
-        for(i in 1:post){
-          aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+(arq[ ,dR[pre+i]]))
-          Hapost[,i]=aux
-          colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
-        }
-        Ha=cbind(Hapre, Hapost)
-        #----------------------------------------------------------------------------------#
-        Hmpre=matrix(NA, nrow=nrow(arq), ncol=pre)
-        for(i in 1:pre){
-          aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
-                                     (arq[ ,dG[traits+i]])+
-                                     (abs((arq[ ,mG[i,traits+i]])))+
-                                     (arq[ ,dPe[i]])+
-                                     (arq[ ,dR[i]]))
-          Hmpre[,i]=aux
-          colnames(Hmpre)=c(paste('Hmpre', seq(1:pre), sep=''))
-        }
-        Hm=Hmpre
-        #----------------------------------------------------------------------------------#
-        c2=matrix(NA, nrow=nrow(arq), ncol=pre)
-        for(i in 1:pre){
-          aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
-                               (arq[ ,dG[traits+i]])+
-                               (abs((arq[ ,mG[i,traits+i]])))+
-                               (arq[ ,dPe[i]])+
-                               (arq[ ,dR[i]]))
-          c2[,i]=aux
-          colnames(c2)=c(paste('c', seq(1:pre), sep=''))
-        }
-        #----------------------------------------------------------------------------------#
-        effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
-        options(warn=-1)
-        for(i in 1:nrow(arq)){
-          aux=vec2sm(arq[i,dG[1]:rev(dG[1:traits+pre, ])[1]])
-          aux=cov2cor(aux)
-          aux=aux[lower.tri(aux)]
-          CorrG[i,]=aux
-        }
-        options(warn=0)
         #----------------------------------------------------------------------------------#
         vG=dG; vG[vG==0]=NA; vG=na.omit(vG); vG=data.frame(id=vG, comp=c(paste("Vga",seq(1:traits),sep=""), paste("Vgm",seq(1:pre),sep="")))
         vPe=dPe; vPe[vPe==0]=NA; vPe=na.omit(vPe); vPe=data.frame(id=vPe, comp=paste("Vmpe", seq(1:nrow(vPe)), sep=""))
@@ -2534,57 +3146,113 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
         dR=as.matrix(diag(mR))
         #----------------------------------------------------------------------------------#
         Hapre=matrix(NA, nrow=nrow(arq), ncol=pre)
-        for(i in 1:pre){
-          aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
-                              (arq[ ,dG[traits+i]])+
-                              (abs((arq[ ,mG[i,traits+i]])))+
-                              (arq[ ,dPe[i]])+
-                              (arq[ ,dR[i]]))
-          Hapre[,i]=aux
-          colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
+        if(covAM==0){
+          for(i in 1:pre){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Hapre[,i]=aux
+            colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
+          }
+          #----------------------------------------------------------------------------------#
+          if (post==0){post=pre} else {post=post}
+          Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
+          for(i in 1:post){
+            aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+(arq[ ,dR[pre+i]]))
+            Hapost[,i]=aux
+            colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
+          }
+          Ha=cbind(Hapre, Hapost)
+          #----------------------------------------------------------------------------------#
+          Hmpre=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
+                                       (arq[ ,dG[traits+i]])+
+                                       (arq[ ,dPe[i]])+
+                                       (arq[ ,dR[i]]))
+            Hmpre[,i]=aux
+            colnames(Hmpre)=c(paste('Hmpre', seq(1:pre), sep=''))
+          }
+          Hm=Hmpre
+          #---------------------------------------------------------------------------------------#
+          effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          CorrG = matrix(NA, nrow=nrow(arq), ncol=2*((effectG^2-effectG)/2))
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:dG[traits]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,1:length(aux)]=aux
+            aux=vec2sm(arq[i,dG[traits+1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,(length(aux)+1):ncol(CorrG)]=aux
+          }
+          options(warn=0)
+          #----------------------------------------------------------------------------------#
+          c2=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
+                                 (arq[ ,dG[traits+i]])+
+                                 (arq[ ,dPe[i]])+
+                                 (arq[ ,dR[i]]))
+            c2[,i]=aux
+            colnames(c2)=c(paste('c', seq(1:pre), sep=''))
+          }
+        } else {
+          for(i in 1:pre){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (abs((arq[ ,mG[i,traits+i]])))+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Hapre[,i]=aux
+            colnames(Hapre)=c(paste('Hapre', seq(1:pre), sep=''))
+          }
+          #----------------------------------------------------------------------------------#
+          if (post==0){post=pre} else {post=post}
+          Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
+          for(i in 1:post){
+            aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+(arq[ ,dR[pre+i]]))
+            Hapost[,i]=aux
+            colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
+          }
+          Ha=cbind(Hapre, Hapost)
+          #----------------------------------------------------------------------------------#
+          Hmpre=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
+                                       (arq[ ,dG[traits+i]])+
+                                       (abs((arq[ ,mG[i,traits+i]])))+
+                                       (arq[ ,dPe[i]])+
+                                       (arq[ ,dR[i]]))
+            Hmpre[,i]=aux
+            colnames(Hmpre)=c(paste('Hmpre', seq(1:pre), sep=''))
+          }
+          Hm=Hmpre
+          #----------------------------------------------------------------------------------#
+          effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:rev(dG[1:traits+pre, ])[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,]=aux
+          }
+          options(warn=0)
+          #----------------------------------------------------------------------------------#
+          c2=matrix(NA, nrow=nrow(arq), ncol=pre)
+          for(i in 1:pre){
+            aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
+                                 (arq[ ,dG[traits+i]])+
+                                 (abs((arq[ ,mG[i,traits+i]])))+
+                                 (arq[ ,dPe[i]])+
+                                 (arq[ ,dR[i]]))
+            c2[,i]=aux
+            colnames(c2)=c(paste('c', seq(1:pre), sep=''))
+          }
         }
-        #----------------------------------------------------------------------------------#
-        if (post==0){post=pre} else {post=post}
-        Hapost=matrix(NA, nrow=nrow(arq), ncol=post)
-        for(i in 1:post){
-          aux=arq[ ,dG[pre+i]]/(arq[ ,dG[pre+i]]+(arq[ ,dR[pre+i]]))
-          Hapost[,i]=aux
-          colnames(Hapost)=c(paste('Hapost', seq(1:post), sep=''))
-        }
-        Ha=cbind(Hapre, Hapost)
-        #----------------------------------------------------------------------------------#
-        Hmpre=matrix(NA, nrow=nrow(arq), ncol=pre)
-        for(i in 1:pre){
-          aux=arq[ ,dG[traits+i]]/(arq[ ,dG[i]]+
-                                     (arq[ ,dG[traits+i]])+
-                                     (abs((arq[ ,mG[i,traits+i]])))+
-                                     (arq[ ,dPe[i]])+
-                                     (arq[ ,dR[i]]))
-          Hmpre[,i]=aux
-          colnames(Hmpre)=c(paste('Hmpre', seq(1:pre), sep=''))
-        }
-        Hm=Hmpre
-        #----------------------------------------------------------------------------------#
-        c2=matrix(NA, nrow=nrow(arq), ncol=pre)
-        for(i in 1:pre){
-          aux=arq[ ,dPe[i]]/(arq[ ,dG[i]]+
-                               (arq[ ,dG[traits+i]])+
-                               (abs((arq[ ,mG[i,traits+i]])))+
-                               (arq[ ,dPe[i]])+
-                               (arq[ ,dR[i]]))
-          c2[,i]=aux
-          colnames(c2)=c(paste('c', seq(1:pre), sep=''))
-        }
-        #----------------------------------------------------------------------------------#
-        effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
-        options(warn=-1)
-        for(i in 1:nrow(arq)){
-          aux=vec2sm(arq[i,dG[1]:rev(dG[1:traits+pre, ])[1]])
-          aux=cov2cor(aux)
-          aux=aux[lower.tri(aux)]
-          CorrG[i,]=aux
-        }
-        options(warn=0)
         #----------------------------------------------------------------------------------#
         vG=dG; vG[vG==0]=NA; vG=na.omit(vG); vG=data.frame(id=vG, comp=c(paste("Vga",seq(1:traits),sep=""), paste("Vgm",seq(1:pre),sep="")))
         vPe=dPe; vPe[vPe==0]=NA; vPe=na.omit(vPe); vPe=data.frame(id=vPe, comp=paste("Vmpe", seq(1:nrow(vPe)), sep=""))
@@ -2651,36 +3319,72 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
         dR=as.matrix(diag(mR))
         #--------------------------------------------------------------------------------------#
         Ha=matrix(NA, nrow=nrow(arq), ncol=traits)
-        for(i in 1:traits){
-          aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
-                              (arq[ ,dG[traits+i]])+
-                              (abs((arq[ ,mG[i,traits+i]])))+
-                              (arq[ ,dPe[i]])+
-                              (arq[ ,dR[i]]))
-          Ha[,i]=aux
-          colnames(Ha)=c(paste('ha', seq(1:traits), sep=''))
+        if(covAM==0){
+          for(i in 1:traits){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Ha[,i]=aux
+            colnames(Ha)=c(paste('ha', seq(1:traits), sep=''))
+          }
+          #--------------------------------------------------------------------------------------#
+          t=matrix(NA, nrow=nrow(arq), ncol=traits)
+          for(i in 1:traits){
+            aux=(arq[ ,dG[i]]+arq[ ,dPe[i]])/(arq[ ,dG[i]]+
+                                                (arq[ ,dG[traits+i]])+
+                                                (arq[ ,dPe[i]])+
+                                                (arq[ ,dR[i]]))
+            t[,i]=aux
+            colnames(t)=c(paste('t', seq(1:traits), sep=''))
+          }
+          #---------------------------------------------------------------------------------------#
+          effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          CorrG = matrix(NA, nrow=nrow(arq), ncol=2*((effectG^2-effectG)/2))
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:dG[traits]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,1:length(aux)]=aux
+            aux=vec2sm(arq[i,dG[traits+1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,(length(aux)+1):ncol(CorrG)]=aux
+          }
+          options(warn=0)
+        } else {
+          for(i in 1:traits){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (abs((arq[ ,mG[i,traits+i]])))+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Ha[,i]=aux
+            colnames(Ha)=c(paste('ha', seq(1:traits), sep=''))
+          }
+          #--------------------------------------------------------------------------------------#
+          t=matrix(NA, nrow=nrow(arq), ncol=traits)
+          for(i in 1:traits){
+            aux=(arq[ ,dG[i]]+arq[ ,dPe[i]])/(arq[ ,dG[i]]+
+                                                (arq[ ,dG[traits+i]])+
+                                                (abs((arq[ ,mG[i,traits+i]])))+
+                                                (arq[ ,dPe[i]])+
+                                                (arq[ ,dR[i]]))
+            t[,i]=aux
+            colnames(t)=c(paste('t', seq(1:traits), sep=''))
+          }
+          #--------------------------------------------------------------------------------------#
+          effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,]=aux
+          }
+          options(warn=0)
         }
-        #--------------------------------------------------------------------------------------#
-        t=matrix(NA, nrow=nrow(arq), ncol=traits)
-        for(i in 1:traits){
-          aux=(arq[ ,dG[i]]+arq[ ,dPe[i]])/(arq[ ,dG[i]]+
-                                              (arq[ ,dG[traits+i]])+
-                                              (abs((arq[ ,mG[i,traits+i]])))+
-                                              (arq[ ,dPe[i]])+
-                                              (arq[ ,dR[i]]))
-          t[,i]=aux
-          colnames(t)=c(paste('t', seq(1:traits), sep=''))
-        }
-        #--------------------------------------------------------------------------------------#
-        effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
-        options(warn=-1)
-        for(i in 1:nrow(arq)){
-          aux=vec2sm(arq[i,dG[1]:rev(dG)[1]])
-          aux=cov2cor(aux)
-          aux=aux[lower.tri(aux)]
-          CorrG[i,]=aux
-        }
-        options(warn=0)
         #----------------------------------------------------------------------------------#
         vG=dG; vG[vG==0]=NA; vG=na.omit(vG); vG=data.frame(id=vG, comp=paste("Vga",seq(1:traits),sep=""))
         vPe=dPe; vPe[vPe==0]=NA; vPe=na.omit(vPe); vPe=data.frame(id=vPe, comp=paste("Vpe", seq(1:nrow(vPe)), sep=""))
@@ -2783,36 +3487,72 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
         dR=as.matrix(diag(mR))
         #--------------------------------------------------------------------------------------#
         Ha=matrix(NA, nrow=nrow(arq), ncol=traits)
-        for(i in 1:traits){
-          aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
-                              (arq[ ,dG[traits+i]])+
-                              (abs((arq[ ,mG[i,traits+i]])))+
-                              (arq[ ,dPe[i]])+
-                              (arq[ ,dR[i]]))
-          Ha[,i]=aux
-          colnames(Ha)=c(paste('ha', seq(1:traits), sep=''))
+        if(covAM==0){
+          for(i in 1:traits){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Ha[,i]=aux
+            colnames(Ha)=c(paste('ha', seq(1:traits), sep=''))
+          }
+          #--------------------------------------------------------------------------------------#
+          t=matrix(NA, nrow=nrow(arq), ncol=traits)
+          for(i in 1:traits){
+            aux=(arq[ ,dG[i]]+arq[ ,dPe[i]])/(arq[ ,dG[i]]+
+                                                (arq[ ,dG[traits+i]])+
+                                                (arq[ ,dPe[i]])+
+                                                (arq[ ,dR[i]]))
+            t[,i]=aux
+            colnames(t)=c(paste('t', seq(1:traits), sep=''))
+          }
+          #---------------------------------------------------------------------------------------#
+          effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          CorrG = matrix(NA, nrow=nrow(arq), ncol=2*((effectG^2-effectG)/2))
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:dG[traits]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,1:length(aux)]=aux
+            aux=vec2sm(arq[i,dG[traits+1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,(length(aux)+1):ncol(CorrG)]=aux
+          }
+          options(warn=0)
+        } else {
+          for(i in 1:traits){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (abs((arq[ ,mG[i,traits+i]])))+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Ha[,i]=aux
+            colnames(Ha)=c(paste('ha', seq(1:traits), sep=''))
+          }
+          #--------------------------------------------------------------------------------------#
+          t=matrix(NA, nrow=nrow(arq), ncol=traits)
+          for(i in 1:traits){
+            aux=(arq[ ,dG[i]]+arq[ ,dPe[i]])/(arq[ ,dG[i]]+
+                                                (arq[ ,dG[traits+i]])+
+                                                (abs((arq[ ,mG[i,traits+i]])))+
+                                                (arq[ ,dPe[i]])+
+                                                (arq[ ,dR[i]]))
+            t[,i]=aux
+            colnames(t)=c(paste('t', seq(1:traits), sep=''))
+          }
+          #----------------------------------------------------------------------------------#
+          effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,]=aux
+          }
+          options(warn=0)
         }
-        #--------------------------------------------------------------------------------------#
-        t=matrix(NA, nrow=nrow(arq), ncol=traits)
-        for(i in 1:traits){
-          aux=(arq[ ,dG[i]]+arq[ ,dPe[i]])/(arq[ ,dG[i]]+
-                                              (arq[ ,dG[traits+i]])+
-                                              (abs((arq[ ,mG[i,traits+i]])))+
-                                              (arq[ ,dPe[i]])+
-                                              (arq[ ,dR[i]]))
-          t[,i]=aux
-          colnames(t)=c(paste('t', seq(1:traits), sep=''))
-        }
-        #----------------------------------------------------------------------------------#
-        effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
-        options(warn=-1)
-        for(i in 1:nrow(arq)){
-          aux=vec2sm(arq[i,dG[1]:rev(dG)[1]])
-          aux=cov2cor(aux)
-          aux=aux[lower.tri(aux)]
-          CorrG[i,]=aux
-        }
-        options(warn=0)
         #----------------------------------------------------------------------------------#
         vG=dG; vG[vG==0]=NA; vG=na.omit(vG); vG=data.frame(id=vG, comp=paste("Vga",seq(1:traits),sep=""))
         vPe=dPe; vPe[vPe==0]=NA; vPe=na.omit(vPe); vPe=data.frame(id=vPe, comp=paste("Vpe", seq(1:nrow(vPe)), sep=""))
@@ -2911,36 +3651,72 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
         dR=as.matrix(diag(mR))
         #--------------------------------------------------------------------------------------#
         Ha=matrix(NA, nrow=nrow(arq), ncol=traits)
-        for(i in 1:traits){
-          aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
-                              (arq[ ,dG[traits+i]])+
-                              (abs((arq[ ,mG[i,traits+i]])))+
-                              (arq[ ,dPe[i]])+
-                              (arq[ ,dR[i]]))
-          Ha[,i]=aux
-          colnames(Ha)=c(paste('ha', seq(1:traits), sep=''))
+        if(covAM==0){
+          for(i in 1:traits){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Ha[,i]=aux
+            colnames(Ha)=c(paste('ha', seq(1:traits), sep=''))
+          }
+          #--------------------------------------------------------------------------------------#
+          t=matrix(NA, nrow=nrow(arq), ncol=traits)
+          for(i in 1:traits){
+            aux=(arq[ ,dG[i]]+arq[ ,dPe[i]])/(arq[ ,dG[i]]+
+                                                (arq[ ,dG[traits+i]])+
+                                                (arq[ ,dPe[i]])+
+                                                (arq[ ,dR[i]]))
+            t[,i]=aux
+            colnames(t)=c(paste('t', seq(1:traits), sep=''))
+          }
+          #---------------------------------------------------------------------------------------#
+          effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          CorrG = matrix(NA, nrow=nrow(arq), ncol=2*((effectG^2-effectG)/2))
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:dG[traits]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,1:length(aux)]=aux
+            aux=vec2sm(arq[i,dG[traits+1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,(length(aux)+1):ncol(CorrG)]=aux
+          }
+          options(warn=0)
+        } else {
+          for(i in 1:traits){
+            aux=arq[ ,dG[i]]/(arq[ ,dG[i]]+
+                                (arq[ ,dG[traits+i]])+
+                                (abs((arq[ ,mG[i,traits+i]])))+
+                                (arq[ ,dPe[i]])+
+                                (arq[ ,dR[i]]))
+            Ha[,i]=aux
+            colnames(Ha)=c(paste('ha', seq(1:traits), sep=''))
+          }
+          #--------------------------------------------------------------------------------------#
+          t=matrix(NA, nrow=nrow(arq), ncol=traits)
+          for(i in 1:traits){
+            aux=(arq[ ,dG[i]]+arq[ ,dPe[i]])/(arq[ ,dG[i]]+
+                                                (arq[ ,dG[traits+i]])+
+                                                (abs((arq[ ,mG[i,traits+i]])))+
+                                                (arq[ ,dPe[i]])+
+                                                (arq[ ,dR[i]]))
+            t[,i]=aux
+            colnames(t)=c(paste('t', seq(1:traits), sep=''))
+          }
+          #----------------------------------------------------------------------------------#
+          effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
+          options(warn=-1)
+          for(i in 1:nrow(arq)){
+            aux=vec2sm(arq[i,dG[1]:rev(dG)[1]])
+            aux=cov2cor(aux)
+            aux=aux[lower.tri(aux)]
+            CorrG[i,]=aux
+          }
+          options(warn=0)
         }
-        #--------------------------------------------------------------------------------------#
-        t=matrix(NA, nrow=nrow(arq), ncol=traits)
-        for(i in 1:traits){
-          aux=(arq[ ,dG[i]]+arq[ ,dPe[i]])/(arq[ ,dG[i]]+
-                                              (arq[ ,dG[traits+i]])+
-                                              (abs((arq[ ,mG[i,traits+i]])))+
-                                              (arq[ ,dPe[i]])+
-                                              (arq[ ,dR[i]]))
-          t[,i]=aux
-          colnames(t)=c(paste('t', seq(1:traits), sep=''))
-        }
-        #----------------------------------------------------------------------------------#
-        effectG=nnzero(dG); CorrG=matrix(NA, nrow=nrow(arq), ncol=((effectG^2-effectG)/2)) 
-        options(warn=-1)
-        for(i in 1:nrow(arq)){
-          aux=vec2sm(arq[i,dG[1]:rev(dG)[1]])
-          aux=cov2cor(aux)
-          aux=aux[lower.tri(aux)]
-          CorrG[i,]=aux
-        }
-        options(warn=0)
         #----------------------------------------------------------------------------------#
         vG=dG; vG[vG==0]=NA; vG=na.omit(vG); vG=data.frame(id=vG, comp=paste("Vga",seq(1:traits),sep=""))
         vPe=dPe; vPe[vPe==0]=NA; vPe=na.omit(vPe); vPe=data.frame(id=vPe, comp=paste("Vpe", seq(1:nrow(vPe)), sep=""))

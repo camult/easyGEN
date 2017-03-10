@@ -22,6 +22,7 @@
 #' @param PED_DEPTH a integer specifying the depth of pedigree search. The default is 3, byt all pedigrees are loaded if it is set to 0. 
 #' @param weight name of the column (numeric) with a vector of weights, may be NULL.  If weights is not NULL, the residual variance of each data-point is set to be proportional to the inverse of the squared-weight.
 #' @param Inb Whether to run the inbupgf90 to compute the coefficient of inbreeding. By default Inb=FALSE.
+#' @param covAM type 0 if covariance between additive and maternal genetic effects must be fixed in zero, 1 otherwise. By default covAM=1.
 #' 
 #' @return BLUPf90 results. 
 #'         
@@ -36,7 +37,7 @@
 remlf90 <- function(formula, phen, ped=NULL, geno=NULL, map=NULL, idName, 
                     diffVAR=NULL, nMaternal=NULL, weight=NULL, Inb=FALSE,
                     covariate=0, OPTeff=NULL, OPTlist=NULL, missing=0,
-                    Gcov=NULL, Rcov=NULL, execute=TRUE, PED_DEPTH=0){
+                    Gcov=NULL, Rcov=NULL, execute=TRUE, PED_DEPTH=0, covAM=1){
   ##----------------------------------------------------------------------------------------##
   cat("\014")
   cat("\n")
@@ -102,6 +103,10 @@ remlf90 <- function(formula, phen, ped=NULL, geno=NULL, map=NULL, idName,
           Gcov[, (nrow(Gcov)-(nTr-nMaternal)+1):nrow(Gcov)] <- 0
         }
       }
+    }
+    if(covAM == 0){
+      Gcov[1:nTr, (nTr+1):nrow(Gcov)] <- 0
+      Gcov[(nTr+1):nrow(Gcov), 1:nTr] <- 0
     }
   }
   if(is.null(ped)){
