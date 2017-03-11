@@ -23,6 +23,7 @@
 #' @param weight name of the column (numeric) with a vector of weights, may be NULL.  If weights is not NULL, the residual variance of each data-point is set to be proportional to the inverse of the squared-weight.
 #' @param Inb Whether to run the inbupgf90 to compute the coefficient of inbreeding. By default Inb=FALSE.
 #' @param covAM type 0 if covariance between additive and maternal genetic effects must be fixed in zero, 1 otherwise. By default covAM=1.
+#' @param covR type 0 if covariance between additive and maternal genetic effects must be fixed in zero, 1 otherwise. By default covAM=1.
 #' 
 #' @return BLUPf90 results. 
 #'         
@@ -37,7 +38,8 @@
 remlf90 <- function(formula, phen, ped=NULL, geno=NULL, map=NULL, idName, 
                     diffVAR=NULL, nMaternal=NULL, weight=NULL, Inb=FALSE,
                     covariate=0, OPTeff=NULL, OPTlist=NULL, missing=0,
-                    Gcov=NULL, Rcov=NULL, execute=TRUE, PED_DEPTH=0, covAM=1){
+                    Gcov=NULL, Rcov=NULL, execute=TRUE, PED_DEPTH=0, 
+                    covAM=1, covR=1){
   ##----------------------------------------------------------------------------------------##
   cat("\014")
   cat("\n")
@@ -233,7 +235,7 @@ remlf90 <- function(formula, phen, ped=NULL, geno=NULL, map=NULL, idName,
     for(i in 1:nrow(EffMat)){
       for(j in 1:length(commonVAR)){
         if(rownames(EffMat)[i]==commonVAR[j]){
-          EffMat[i,] <- rep(grep(commonVAR[j], keep_phen), nTr)
+          EffMat[i,] <- rep(grep(paste0("^",commonVAR[j],"$"), keep_phen), nTr)
         }
       }
     }
@@ -255,6 +257,9 @@ remlf90 <- function(formula, phen, ped=NULL, geno=NULL, map=NULL, idName,
     Gcov <- round(as.matrix(Gcov) + (diag(diag(as.matrix(Gcov)))), 5)
   }else{
     Rcov <- round(as.matrix(Rcov) + (as.matrix(Rcov)), 5)
+    if(covR==0){
+      Rcov <- diag(diag(Rcov))
+    }
     Gcov <- round(as.matrix(Gcov) + (as.matrix(Gcov)), 5)
   }
   #---------------------------------------------------------------------------------------#

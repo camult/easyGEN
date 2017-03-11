@@ -24,6 +24,7 @@
 #' @param weight name of the column (numeric) with a vector of weights, may be NULL.  If weights is not NULL, the residual variance of each data-point is set to be proportional to the inverse of the squared-weight.
 #' @param PED_DEPTH a integer specifying the depth of pedigree search. The default is 3, byt all pedigrees are loaded if it is set to 0. 
 #' @param covAM type 0 if covariance between additive and maternal genetic effects must be fixed in zero, 1 otherwise. By default covAM=1.
+#' @param covR type 0 if covariance between additive and maternal genetic effects must be fixed in zero, 1 otherwise. By default covAM=1.
 #' 
 #' @return gibbsf90 results. 
 #'         
@@ -39,7 +40,8 @@ gibbsf90 <- function(formula, phen, ped=NULL, geno=NULL, map=NULL, idName,
                      diffVAR=NULL, nMaternal=NULL, weight=NULL, 
                      nIter=1500, burnIn=500, thin = 5,  missing=0,
                      covariate=0, OPTeff=NULL, OPTlist=NULL, intern=TRUE,
-                     Gcov=NULL, Rcov=NULL, execute=TRUE, PED_DEPTH=0, covAM=1){
+                     Gcov=NULL, Rcov=NULL, execute=TRUE, PED_DEPTH=0, 
+                     covAM=1, covR=1){
   ##----------------------------------------------------------------------------------------##
   cat("\014")
   cat("\n")
@@ -235,7 +237,7 @@ gibbsf90 <- function(formula, phen, ped=NULL, geno=NULL, map=NULL, idName,
     for(i in 1:nrow(EffMat)){
       for(j in 1:length(commonVAR)){
         if(rownames(EffMat)[i]==commonVAR[j]){
-          EffMat[i,] <- rep(grep(commonVAR[j], keep_phen), nTr)
+          EffMat[i,] <- rep(grep(paste0("^",commonVAR[j],"$"), keep_phen), nTr)
         }
       }
     }
@@ -257,6 +259,9 @@ gibbsf90 <- function(formula, phen, ped=NULL, geno=NULL, map=NULL, idName,
     Gcov <- round(as.matrix(Gcov) + (diag(diag(as.matrix(Gcov)))), 5)
   }else{
     Rcov <- round(as.matrix(Rcov) + (as.matrix(Rcov)), 5)
+    if(covR==0){
+      Rcov <- diag(diag(Rcov))
+    }
     Gcov <- round(as.matrix(Gcov) + (as.matrix(Gcov)), 5)
   }
   #---------------------------------------------------------------------------------------#
