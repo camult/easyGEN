@@ -1,6 +1,6 @@
 #' @title A function interfacing gibbs2f90
 #' 
-#' @description The function uses the model formula language in R to describe the model and from this generates the files needed to do an analysis using gibbs2f90 software.
+#' @description The function uses the model formula language in R to describe the model and from this generates the files needed to do an analysis using gibbs2f90 software!
 #' 
 #' @param formula A two-sided linear formula object describing the fixed effects part of the model, 
 #'        with the responses on the left of a ~ operator (separated by | if more then one response)
@@ -25,6 +25,7 @@
 #' @param PED_DEPTH a integer specifying the depth of pedigree search. The default is 3, byt all pedigrees are loaded if it is set to 0. 
 #' @param covAM type 0 if covariance between additive and maternal genetic effects must be fixed in zero, 1 otherwise. By default covAM=1.
 #' @param covR type 0 if covariance between additive and maternal genetic effects must be fixed in zero, 1 otherwise. By default covAM=1.
+#' @param useF logical value indicating whether inbreeding coefficient of this animal should be computed. Default is FALSE.
 #' 
 #' @return gibbsf90 results. 
 #'         
@@ -41,7 +42,7 @@ gibbsf90 <- function(formula, phen, ped=NULL, geno=NULL, map=NULL, idName,
                      nIter=1500, burnIn=500, thin = 5,  missing=0,
                      covariate=0, OPTeff=NULL, OPTlist=NULL, intern=TRUE,
                      Gcov=NULL, Rcov=NULL, execute=TRUE, PED_DEPTH=0, 
-                     covAM=1, covR=1){
+                     covAM=1, covR=1, useF=FALSE){
   ##----------------------------------------------------------------------------------------##
   cat("\014")
   cat("\n")
@@ -303,6 +304,10 @@ gibbsf90 <- function(formula, phen, ped=NULL, geno=NULL, map=NULL, idName,
   cat("pedigree.dat\n")
   cat("PED_DEPTH\n")
   cat(PED_DEPTH,"\n")
+  if(useF){
+    cat("INBREEDING\n")
+    cat("pedigree\n")
+  }
   cat("(CO)VARIANCES\n")
   sink()
   write.table(Gcov,file="renum.par", col.names=F, row.names=F, quote=F, sep=" ", append=T)

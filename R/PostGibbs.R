@@ -10,7 +10,7 @@
 #' So, if you want to use this package, the maternal effects must come before the direct effects. 
 #' This package has also an option "ICgraph" that get partially, oriented graph, connected pairs 
 #' and unshielded colliders, using Complete IC Algorithm adapted to work with variable 
-#' number of traits (Valente et al., 2010).
+#' number of traits (Valente et al., 2010)!
 #' 
 #' @param local Set here the path of directory where the results of 
 #'        THRGIBBS* and GIBBS* are. 
@@ -3967,7 +3967,7 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
         # Madison, Feb. 23, 2017 - Fernando Brito
         # Changed from: ind <- which((pdag == 1 & t(pdag) == 1), arr.ind = TRUE)
         #           to: ind <- which((pdag == 0 & t(pdag) == 1), arr.ind = TRUE)
-        ind <- which((pdag == 0 & t(pdag) == 1), arr.ind = TRUE)
+        ind <- which((pdag == 1 & t(pdag) == 1), arr.ind = TRUE)
         for (i in seq_len(nrow(ind))) {
           a <- ind[i, 1]
           b <- ind[i, 2]

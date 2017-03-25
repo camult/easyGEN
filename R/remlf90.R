@@ -1,6 +1,6 @@
 #' @title R functions for interfacing remlf90 software
 #' 
-#' @description The function uses the model formula language in R to describe the model and from this generates the files needed to do an analysis using remlf90 software.
+#' @description The function uses the model formula language in R to describe the model and from this generates the files needed to do an analysis using remlf90 software!
 #' 
 #' @param formula A two-sided linear formula object describing the fixed effects part of the model, 
 #'        with the responses on the left of a ~ operator (separated by | if more then one response)
@@ -24,6 +24,7 @@
 #' @param Inb Whether to run the inbupgf90 to compute the coefficient of inbreeding. By default Inb=FALSE.
 #' @param covAM type 0 if covariance between additive and maternal genetic effects must be fixed in zero, 1 otherwise. By default covAM=1.
 #' @param covR type 0 if covariance between additive and maternal genetic effects must be fixed in zero, 1 otherwise. By default covAM=1.
+#' @param useF logical value indicating whether inbreeding coefficient of this animal should be computed. Default is FALSE.
 #' 
 #' @return BLUPf90 results. 
 #'         
@@ -39,7 +40,7 @@ remlf90 <- function(formula, phen, ped=NULL, geno=NULL, map=NULL, idName,
                     diffVAR=NULL, nMaternal=NULL, weight=NULL, Inb=FALSE,
                     covariate=0, OPTeff=NULL, OPTlist=NULL, missing=0,
                     Gcov=NULL, Rcov=NULL, execute=TRUE, PED_DEPTH=0, 
-                    covAM=1, covR=1){
+                    covAM=1, covR=1, useF=FALSE){
   ##----------------------------------------------------------------------------------------##
   cat("\014")
   cat("\n")
@@ -301,6 +302,10 @@ remlf90 <- function(formula, phen, ped=NULL, geno=NULL, map=NULL, idName,
   cat("pedigree.dat\n")
   cat("PED_DEPTH\n")
   cat(PED_DEPTH,"\n")
+  if(useF){
+    cat("INBREEDING\n")
+    cat("pedigree\n")
+  }
   cat("(CO)VARIANCES\n")
   sink()
   write.table(Gcov,file="renum.par", col.names=F, row.names=F, quote=F, sep=" ", append=T)
