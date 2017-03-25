@@ -22,6 +22,4 @@ biocLite("Rgraphviz")
 
 To see the full list of exported functions:
 
-library("tinyutils")
-
 ls(package:easyGEN)
