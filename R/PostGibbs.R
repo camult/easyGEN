@@ -3967,7 +3967,7 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
         # Madison, Feb. 23, 2017 - Fernando Brito
         # Changed from: ind <- which((pdag == 1 & t(pdag) == 1), arr.ind = TRUE)
         #           to: ind <- which((pdag == 0 & t(pdag) == 1), arr.ind = TRUE)
-        ind <- which((pdag == 1 & t(pdag) == 1), arr.ind = TRUE)
+        ind <- which((pdag == 0 & t(pdag) == 1), arr.ind = TRUE)
         for (i in seq_len(nrow(ind))) {
           a <- ind[i, 1]
           b <- ind[i, 2]
