@@ -4107,7 +4107,9 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
       dev.off()
       plot(POG2, attrs=list(node=list(fillcolor="white"), edge=list(splines="line", arrowsize=1, arrowType="vee")))
     }
-    DAGlist <- list(dConnect,unshColl,t(pdag))
+    DAGlist <- list(dConnect=dConnect,
+                    unshColl=unshColl,
+                    pDAG=t(pdag))
     return(DAGlist)
   }
   gib.samples <- list.files(pattern = "gib.samples")
