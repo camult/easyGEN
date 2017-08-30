@@ -3952,48 +3952,131 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
         pdag[dirE[i,2],dirE[i,1]]<-0
       }
       old_pdag <- matrix(0, p, p)
-      old_pdag <- pdag
-      ind <- which((pdag == 1 & t(pdag) == 0), arr.ind = TRUE)
-      for (i in seq_len(nrow(ind))) {
-        a <- ind[i, 1]
-        b <- ind[i, 2]
-        indC <- which((pdag[b, ] == 1 & pdag[, b] == 1) & (pdag[a, ] == 0 & pdag[, a] == 0))
-        if (length(indC) > 0) {
-          pdag[b, indC] <- 1
-          pdag[indC, b] <- 0
-        }
-      }
-      ind <- which((pdag == 1 & t(pdag) == 1), arr.ind = TRUE)
-      for (i in seq_len(nrow(ind))) {
-        a <- ind[i, 1]
-        b <- ind[i, 2]
-        indC <- which((pdag[a, ] == 1 & pdag[, a] == 0) & (pdag[, b] == 1 & pdag[b, ] == 0))
-        if (length(indC) > 0) {
-          pdag[a, b] <- 1
-          pdag[b, a] <- 0
-        }
-      }
-      ind <- which((pdag == 1 & t(pdag) == 1), arr.ind = TRUE)
-      for (i in seq_len(nrow(ind))) {
-        a <- ind[i, 1]
-        b <- ind[i, 2]
-        indC <- which((pdag[a, ] == 1 & pdag[, a] == 1) & (pdag[, b] == 1 & pdag[b, ] == 0))
-        if (length(indC) >= 2) {
-          g2 <- pdag[indC, indC]
-          if (length(g2) <= 1) {
-            g2 <- 0
+      while (!all(old_pdag == pdag)) {
+        ind <- which((pdag == 1 & t(pdag) == 0), arr.ind = TRUE)
+        for (i in seq_len(nrow(ind))) {
+          a <- ind[i, 1]
+          b <- ind[i, 2]
+          indC <- which((pdag[b, ] == 1 & pdag[, b] == 1) & (pdag[a, ] == 0 & pdag[, a] == 0))
+          if (length(indC) > 0) {
+            pdag[b, indC] <- 1
+            pdag[indC, b] <- 0
           }
-          else {
-            diag(g2) <- rep(1, length(indC))
-          }
-          if (any(g2 == 0)) {
+        }
+        old_pdag <- pdag
+        ind <- which((pdag == 1 & t(pdag) == 1), arr.ind = TRUE)
+        for (i in seq_len(nrow(ind))) {
+          a <- ind[i, 1]
+          b <- ind[i, 2]
+          indC <- which((pdag[a, ] == 1 & pdag[, a] == 0) & (pdag[, b] == 1 & pdag[b, ] == 0))
+          if (length(indC) > 0) {
             pdag[a, b] <- 1
             pdag[b, a] <- 0
           }
         }
+        ind <- which((pdag == 1 & t(pdag) == 1), arr.ind = TRUE)
+        for (i in seq_len(nrow(ind))) {
+          a <- ind[i, 1]
+          b <- ind[i, 2]
+          indC <- which((pdag[a, ] == 1 & pdag[, a] == 1) & (pdag[, b] == 1 & pdag[b, ] == 0))
+          if (length(indC) >= 2) {
+            g2 <- pdag[indC, indC]
+            if (length(g2) <= 1) {
+              g2 <- 0
+            }
+            else {
+              diag(g2) <- rep(1, length(indC))
+            }
+            if (any(g2 == 0)) {
+              pdag[a, b] <- 1
+              pdag[b, a] <- 0
+            }
+          }
+        }
       }
     }
+    #---------------------------------------------------------------------------------#
+    # Remove any adjacent cycles if any by using Depth First Search (DFS)
+    # Madison, September 30, 2017
+    # This function is from predictionet R package
+    #---------------------------------------------------------------------------------#
+    adj.remove.cycles <- function (adjmat, from, maxlength){
+      pathlength = 0
+      ".adj.remove.cycles.DFS" <- function(adjmat, adjmat.mask, nodix.from, nodix, nodest, pathlength, maxlength) {
+        if (nodix.from %in% (1:length(nodest)) && nodest[nodix] == 1) {
+          adjmat.mask[nodix.from, nodix] <- TRUE
+          return(adjmat.mask)
+        }
+        else {
+          if (pathlength > maxlength) {
+            return(adjmat.mask)
+          }
+          else {
+            adjmat2 <- adjmat
+            adjmat2[adjmat.mask] <- 0
+            ee <- which(adjmat2[nodix, ] > 0)
+            ee <- ee[order(adjmat2[nodix, ee], decreasing = FALSE)]
+            if (length(ee) > 0) {
+              for (i in 1:length(ee)) {
+                nodest2 <- nodest
+                nodest2[nodix] <- 1
+                adjmat.mask <- .adj.remove.cycles.DFS(adjmat = adjmat, 
+                                                      adjmat.mask = adjmat.mask, 
+                                                      nodix.from = nodix, 
+                                                      nodix = ee[i], 
+                                                      nodest = nodest2, 
+                                                      pathlength = pathlength + 1, 
+                                                      maxlength = maxlength)
+              }
+              return(adjmat.mask)
+            }
+            else {
+              return(adjmat.mask)
+            }
+          }
+        }
+      }
+      if (!is.matrix(adjmat) && nrow(adjmat) != ncol(adjmat)) {
+        stop("the adjacency matrix should be square!")
+      }
+      if (is.null(rownames(adjmat))) {
+        rownames(adjmat) <- colnames(adjmat) <- paste("X", 1:nrow(adjmat), sep = "")
+      }
+      nNames <- rownames(adjmat)
+      adjmat <- adjmat[nNames, nNames, drop = FALSE]
+      adjmat2 <- adjmat
+      adjmat.mask <- matrix(FALSE, nrow = nrow(adjmat), ncol = ncol(adjmat), 
+                            dimnames = dimnames(adjmat))
+      iix <- which(diag(adjmat2) != 0)
+      if (length(iix) > 0) {
+        adjmat.mask[cbind(iix, iix)] <- TRUE
+      }
+      adjmat2[adjmat.mask] <- 0
+      if (missing(from)) {
+        nnix <- order(apply(adjmat2, 1, max), decreasing = FALSE)
+      }
+      else {
+        if (is.integer(from)) {
+          nnix <- from
+        }
+        else {
+          nnix <- match(from, nNames)
+        }
+      }
+      for (i in 1:length(nnix)) {
+        nodest <- rep(0, ncol(adjmat2))
+        names(nodest) <- colnames(adjmat2)
+        adjmat.mask <- .adj.remove.cycles.DFS(adjmat = adjmat2, 
+                                              adjmat.mask = adjmat.mask, nodix.from = -1, nodix = nnix[i], 
+                                              nodest = nodest, pathlength = pathlength, maxlength = maxlength)
+        adjmat2[adjmat.mask] <- 0
+      }
+      return(adjmat2)
+    }
+    pdag <- adj.remove.cycles(adjmat=pdag, from=1, maxlength=ncol(pdag)-1)
+    #---------------------------------------------------------------------------------#
     # graph plot
+    #---------------------------------------------------------------------------------#
     POG2 <- as(pdag, "graphNEL")
     dirE2 <- which((pdag == 1 & t(pdag) == 0), arr.ind = TRUE)
     if(nrow(dirE2)>0){
@@ -4024,6 +4107,8 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
       dev.off()
       plot(POG2, attrs=list(node=list(fillcolor="white"), edge=list(splines="line", arrowsize=1, arrowType="vee")))
     }
+    DAGlist <- list(dConnect,unshColl,t(pdag))
+    return(DAGlist)
   }
   gib.samples <- list.files(pattern = "gib.samples")
   if(!identical(gib.samples,character(0))){
