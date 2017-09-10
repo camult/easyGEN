@@ -3,7 +3,7 @@
 #' @description The function uses the model formula language in R to describe the model and from this generates the files needed to do an analysis using remlf90 software!
 #' 
 #' @param formula A two-sided linear formula object describing the fixed effects part of the model, 
-#'        with the responses on the left of a ~ operator (separated by | if more then one response)
+#'        with the responses on the left of a ~ operator (separated by "|" if more then one response)
 #'        and the terms, separated by + operators, on the right.
 #' @param phen Name of phenotype file.
 #' @param ped Name of pedigree file
