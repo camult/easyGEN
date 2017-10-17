@@ -338,6 +338,21 @@ remlf90 <- function(formula, phen, ped=NULL, geno=NULL, map=NULL, idName,
     if(length(grep("Matrix not positive definite", lastRow))>0){
       warning("\nMatrix not positive definite\n")
     }
+    if(file.exists("solutions")){
+      renadd <- list.files(pattern="renadd")
+      ANIMALpos <- unique(na.omit(as.numeric(unlist(strsplit(unlist(renadd), "[^1-9]+")))))
+      Solution <- read.table("solutions", skip = 1, header = F)
+      Solution <- Solution[Solution[,2]==ANIMALpos,-c(1,2)]
+      if(ncol(Solution)==3){
+        colnames(Solution)<-c("animal", "Solution", "se")
+      } else {
+        colnames(Solution)<-c("animal", "Solution")
+      }
+      OriginalID <- read.table(renadd, header = F)[,c(1,10)]
+      colnames(OriginalID)<-c("animal", "ID")
+      Solution <- merge(OriginalID, Solution, by=intersect("animal","animal"))
+      write.table(Solution, "Solution.txt", row.names = F, col.names = T, quote = F)
+    }
     #---------------------------------------------------------------------------------------#
     if(isTRUE(Inb)){
       #---------------------------------------------------------------------------------------#
@@ -352,83 +367,85 @@ remlf90 <- function(formula, phen, ped=NULL, geno=NULL, map=NULL, idName,
       ANIMALpos <- unique(na.omit(as.numeric(unlist(strsplit(unlist(renadd), "[^1-9]+")))))
       Solution <- read.table("solutions", skip = 1, header = F)
       Solution <- Solution[Solution[,2]==ANIMALpos,-c(1,2)]
-      colnames(Solution)<-c("animal", "Solution", "Se")
-      Solution$gVAR <- rep(gVAR, (nrow(Solution)/nTr))
-      #Solution$rVAR <- rep(rVAR, (nrow(Solution)/nTr))
-      #---------------------------------------------------------------------------------------#
-      # Estimating inbreeding
-      #---------------------------------------------------------------------------------------#
-      cat("\nComputing Inbreeding...\n")
-      inbupgf90 <- data.frame(inbupgf=capture.output(system(paste0("inbupgf90.exe --pedfile ",renadd), intern=TRUE)))
-      #---------------------------------------------------------------------------------------#
-      Inbreeding <- read.table(paste0(as.character(renadd),".solinb"))
-      colnames(Inbreeding) <- c("animal","F")
-      Inbreeding$F <-  Inbreeding$F+1
-      # Pedigree information and Inbreeding coefficient
-      PEDrenum <- read.table(renadd)
-      #ped <- PEDrenum[,1:3]
-      #colnames(ped) <- c("animal","sire","dam")
-      PEDrenum <- PEDrenum[, c(1,ncol(PEDrenum))]
-      colnames(PEDrenum) <- c("animal", idName)
-      Inbreeding <- merge(PEDrenum, Inbreeding, by=intersect("animal","animal"), all=TRUE)
-      Solution <- merge(Solution, Inbreeding, by=intersect("animal","animal"), all=TRUE)
-      #---------------------------------------------------------------------------------------#
-      # Estimating accuracy
-      #---------------------------------------------------------------------------------------#
-      # Prediction Error Variance (PEV)
-      #---------------------------------------------------------------------------------------#
-      cat("   prediction error variance: PEV...\n")
-      Solution$PEV  <- Solution$Se^2
-      #---------------------------------------------------------------------------------------#
-      # Accuracy: sqrt(1-PEV/gVAR)
-      # https://gsejournal.biomedcentral.com/articles/10.1186/s12711-016-0188-y
-      # http://www-naweb.iaea.org/nafa/news/Blup_Animal_Model.pdf
-      #---------------------------------------------------------------------------------------#
-      cat("   accuracy: sqrt(1-PEV/gVAR)...\n")
-      Solution$Acc  <- suppressWarnings(sqrt(1-(Solution$PEV/Solution$gVAR)))
-      #---------------------------------------------------------------------------------------#
-      # Accuracy: sqrt(1-PEV/(F*gVAR))
-      # http://www.aaabg.org/livestocklibrary/1997/AB97119.pdf
-      #---------------------------------------------------------------------------------------#
-      cat("   accuracy: sqrt(1-PEV/(F*gVAR))...\n")
-      Solution$fAcc <- suppressWarnings(sqrt(1-(Solution$PEV/(Solution$F*Solution$gVAR))))
-      #---------------------------------------------------------------------------------------#
-      # BIF Accuracy: 1-sqrt(PEV/gVAR)
-      # http://beefimprovement.org/content/uploads/2015/08/REVISED-MasterEd-BIF-GuidelinesFinal-08-2015.pdf
-      # http://nce.ads.uga.edu/~shogo/html/research/VCE_08.pdf   pag. 36 corrected square to sqrt
-      #---------------------------------------------------------------------------------------#
-      cat("   BIF accuracy: BIFacc = 1-sqrt(PEV/gVAR)...\n")
-      Solution$BIFacc <- suppressWarnings(1-sqrt(Solution$PEV/Solution$gVAR))
-      #---------------------------------------------------------------------------------------#
-      # Standard Accuracy: sAcc = sqrt(1-(1-BIF)^2)
-      # https://www.animalsciencepublications.org/publications/jas/pdfs/92/2/485
-      # http://www.beefefficiency.org/info/1297-9686-43-40.pdf
-      #---------------------------------------------------------------------------------------#
-      cat("   standard accuracy from BIF: sqrt(1-(1-BIF)^2)...\n")
-      Solution$sAcc <- suppressWarnings(sqrt(1-((1-Solution$BIFacc)^2)))
-      #---------------------------------------------------------------------------------------#
-      # The correlation between EPD and true breeding value, rEPD,BV is calculated as:
-      # http://beefimprovement.org/content/uploads/2015/08/REVISED-MasterEd-BIF-GuidelinesFinal-08-2015.pdf
-      #---------------------------------------------------------------------------------------#
-      # rEPD,BV = sqrt((gVAR-PEV)/gVAR)
-      #---------------------------------------------------------------------------------------#
-      #cat("   true accuracy (r): rEPD,BV = sqrt((gVAR-PEV)/gVAR)...\n")
-      #Solution$rEPDxBV <- suppressWarnings(sqrt((Solution$gVAR-Solution$PEV)/(Solution$PEV)))
-      #---------------------------------------------------------------------------------------#
-      # BIF Accuracy : 1-sqrt(1-rEPD,BV)
-      # http://beefimprovement.org/content/uploads/2015/08/REVISED-MasterEd-BIF-GuidelinesFinal-08-2015.pdf
-      #---------------------------------------------------------------------------------------#
-      #cat("   BIF accuracy 1: rBIF = 1-sqrt(1-rEPD,BV)...\n")
-      #Solution$rBIF <- suppressWarnings(1-sqrt(1-Solution$rEPDxBV))
-      #Solution$rBIF <- ifelse(Solution$rBIF<0, NA, Solution$rBIF)
-      #---------------------------------------------------------------------------------------#
-      Solution$Acc   <- ifelse(Solution$Acc   <0, NA, Solution$Acc   )
-      Solution$fAcc  <- ifelse(Solution$fAcc  <0, NA, Solution$fAcc  )
-      Solution$BIFacc<- ifelse(Solution$BIFacc<0, NA, Solution$BIFacc)
-      Solution$sAcc  <- ifelse(Solution$sAcc  <0, NA, Solution$sAcc  )
-      #---------------------------------------------------------------------------------------#
-      Solution[is.na(Solution)] <- 0
-      write.table(Solution, "Sol_Acc.txt", row.names=F, col.names=T, quote=F)
+      if(ncol(Solution)==3){
+        cat("Please add: OPTlist=list('OPTION sol se') to compute PEV and Accuracy")
+        colnames(Solution)<-c("animal", "Solution", "Se")
+        Solution$gVAR <- rep(gVAR, (nrow(Solution)/nTr))
+        #---------------------------------------------------------------------------------------#
+        # Estimating inbreeding
+        #---------------------------------------------------------------------------------------#
+        cat("\nComputing Inbreeding...\n")
+        inbupgf90 <- data.frame(inbupgf=capture.output(system(paste0("inbupgf90.exe --pedfile ",renadd), intern=TRUE)))
+        #---------------------------------------------------------------------------------------#
+        Inbreeding <- read.table(paste0(as.character(renadd),".solinb"))
+        colnames(Inbreeding) <- c("animal","F")
+        Inbreeding$F <-  Inbreeding$F+1
+        # Pedigree information and Inbreeding coefficient
+        PEDrenum <- read.table(renadd)
+        #ped <- PEDrenum[,1:3]
+        #colnames(ped) <- c("animal","sire","dam")
+        PEDrenum <- PEDrenum[, c(1,ncol(PEDrenum))]
+        colnames(PEDrenum) <- c("animal", idName)
+        Inbreeding <- merge(PEDrenum, Inbreeding, by=intersect("animal","animal"), all=TRUE)
+        Solution <- merge(Solution, Inbreeding, by=intersect("animal","animal"), all=TRUE)
+        #---------------------------------------------------------------------------------------#
+        # Estimating accuracy
+        #---------------------------------------------------------------------------------------#
+        # Prediction Error Variance (PEV)
+        #---------------------------------------------------------------------------------------#
+        cat("   prediction error variance: PEV...\n")
+        Solution$PEV  <- Solution$Se^2
+        #---------------------------------------------------------------------------------------#
+        # Accuracy: sqrt(1-PEV/gVAR)
+        # https://gsejournal.biomedcentral.com/articles/10.1186/s12711-016-0188-y
+        # http://www-naweb.iaea.org/nafa/news/Blup_Animal_Model.pdf
+        #---------------------------------------------------------------------------------------#
+        cat("   accuracy: sqrt(1-PEV/gVAR)...\n")
+        Solution$Acc  <- suppressWarnings(sqrt(1-(Solution$PEV/Solution$gVAR)))
+        #---------------------------------------------------------------------------------------#
+        # Accuracy: sqrt(1-PEV/(F*gVAR))
+        # http://www.aaabg.org/livestocklibrary/1997/AB97119.pdf
+        #---------------------------------------------------------------------------------------#
+        cat("   accuracy: sqrt(1-PEV/(F*gVAR))...\n")
+        Solution$fAcc <- suppressWarnings(sqrt(1-(Solution$PEV/(Solution$F*Solution$gVAR))))
+        #---------------------------------------------------------------------------------------#
+        # BIF Accuracy: 1-sqrt(PEV/gVAR)
+        # http://beefimprovement.org/content/uploads/2015/08/REVISED-MasterEd-BIF-GuidelinesFinal-08-2015.pdf
+        # http://nce.ads.uga.edu/~shogo/html/research/VCE_08.pdf   pag. 36 corrected square to sqrt
+        #---------------------------------------------------------------------------------------#
+        cat("   BIF accuracy: BIFacc = 1-sqrt(PEV/gVAR)...\n")
+        Solution$BIFacc <- suppressWarnings(1-sqrt(Solution$PEV/Solution$gVAR))
+        #---------------------------------------------------------------------------------------#
+        # Standard Accuracy: sAcc = sqrt(1-(1-BIF)^2)
+        # https://www.animalsciencepublications.org/publications/jas/pdfs/92/2/485
+        # http://www.beefefficiency.org/info/1297-9686-43-40.pdf
+        #---------------------------------------------------------------------------------------#
+        cat("   standard accuracy from BIF: sqrt(1-(1-BIF)^2)...\n")
+        Solution$sAcc <- suppressWarnings(sqrt(1-((1-Solution$BIFacc)^2)))
+        #---------------------------------------------------------------------------------------#
+        # The correlation between EPD and true breeding value, rEPD,BV is calculated as:
+        # http://beefimprovement.org/content/uploads/2015/08/REVISED-MasterEd-BIF-GuidelinesFinal-08-2015.pdf
+        #---------------------------------------------------------------------------------------#
+        # rEPD,BV = sqrt((gVAR-PEV)/gVAR)
+        #---------------------------------------------------------------------------------------#
+        #cat("   true accuracy (r): rEPD,BV = sqrt((gVAR-PEV)/gVAR)...\n")
+        #Solution$rEPDxBV <- suppressWarnings(sqrt((Solution$gVAR-Solution$PEV)/(Solution$PEV)))
+        #---------------------------------------------------------------------------------------#
+        # BIF Accuracy : 1-sqrt(1-rEPD,BV)
+        # http://beefimprovement.org/content/uploads/2015/08/REVISED-MasterEd-BIF-GuidelinesFinal-08-2015.pdf
+        #---------------------------------------------------------------------------------------#
+        #cat("   BIF accuracy 1: rBIF = 1-sqrt(1-rEPD,BV)...\n")
+        #Solution$rBIF <- suppressWarnings(1-sqrt(1-Solution$rEPDxBV))
+        #Solution$rBIF <- ifelse(Solution$rBIF<0, NA, Solution$rBIF)
+        #---------------------------------------------------------------------------------------#
+        Solution$Acc   <- ifelse(Solution$Acc   <0, NA, Solution$Acc   )
+        Solution$fAcc  <- ifelse(Solution$fAcc  <0, NA, Solution$fAcc  )
+        Solution$BIFacc<- ifelse(Solution$BIFacc<0, NA, Solution$BIFacc)
+        Solution$sAcc  <- ifelse(Solution$sAcc  <0, NA, Solution$sAcc  )
+        #---------------------------------------------------------------------------------------#
+        Solution[is.na(Solution)] <- 0
+        write.table(Solution, "Sol_Acc.txt", row.names=F, col.names=T, quote=F)
+      }
     }
     #---------------------------------------------------------------------------------------#
     # Removing files that is no longer needed anymore
