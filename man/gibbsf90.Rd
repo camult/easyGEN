@@ -8,7 +8,7 @@ gibbsf90(formula, phen, ped = NULL, geno = NULL, map = NULL, idName,
   diffVAR = NULL, nMaternal = NULL, weight = NULL, nIter = 1500,
   burnIn = 500, thin = 5, missing = 0, covariate = 0, OPTeff = NULL,
   OPTlist = NULL, intern = TRUE, Gcov = NULL, Rcov = NULL,
-  execute = TRUE, PED_DEPTH = 0)
+  execute = TRUE, PED_DEPTH = 0, covAM = 1, covR = 1, useF = FALSE)
 }
 \arguments{
 \item{formula}{A two-sided linear formula object describing the fixed effects part of the model, 
@@ -50,12 +50,18 @@ and the terms, separated by + operators, on the right.}
 \item{execute}{Whether to run the gibbsf90. By default execute=TRUE.}
 
 \item{PED_DEPTH}{a integer specifying the depth of pedigree search. The default is 3, byt all pedigrees are loaded if it is set to 0.}
+
+\item{covAM}{type 0 if covariance between additive and maternal genetic effects must be fixed in zero, 1 otherwise. By default covAM=1.}
+
+\item{covR}{type 0 if residual covariance must be fixed in zero, 1 otherwise. By default covAM=1.}
+
+\item{useF}{logical value indicating whether inbreeding coefficient of this animal should be computed. Default is FALSE.}
 }
 \value{
 gibbsf90 results.
 }
 \description{
-The function uses the model formula language in R to describe the model and from this generates the files needed to do an analysis using gibbs2f90 software.
+The function uses the model formula language in R to describe the model and from this generates the files needed to do an analysis using gibbs2f90 software!
 }
 \references{
 Misztal I, Tsuruta S.,  Lourenco D., Aguilar I., Legarra A., 

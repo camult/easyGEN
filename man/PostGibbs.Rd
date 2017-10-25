@@ -5,7 +5,8 @@
 \title{Summary of Multi-trait Bayesian Models}
 \usage{
 PostGibbs(local = getwd(), burnIn = 0, thinning = 1, line = 1,
-  HPD = 0.95, Names = c(), ICgraph = FALSE, Summary = TRUE)
+  HPD = 0.95, Names = c(), ICgraph = FALSE, Summary = TRUE, covAM = 1,
+  DFS = FALSE)
 }
 \arguments{
 \item{local}{Set here the path of directory where the results of 
@@ -26,6 +27,10 @@ you don't need to use this parameter.}
 \item{ICgraph}{It is a logical name, indicating if the IC Graph should be created.}
 
 \item{Summary}{It is a logical name, indicating if the statistical summary should be run.}
+
+\item{covAM}{type 0 if covariance between additive and maternal genetic effects must be fixed in zero, 1 otherwise. By default covAM=1.}
+
+\item{DFS}{It is a logical name. Set it to TRUE to remove any adjacent cycles if any by using Depth First Search (DFS).}
 }
 \value{
 A PDF file with graphics that summarizes an as.mcmc.obj 
@@ -52,7 +57,7 @@ because if the maternal effects came after the direct effects, this package will
 So, if you want to use this package, the maternal effects must come before the direct effects. 
 This package has also an option "ICgraph" that get partially, oriented graph, connected pairs 
 and unshielded colliders, using Complete IC Algorithm adapted to work with variable 
-number of traits (Valente et al., 2010).
+number of traits (Valente et al., 2010)!
 }
 \examples{
 
