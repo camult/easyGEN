@@ -258,13 +258,11 @@ gibbsf90 <- function(formula, phen, ped=NULL, geno=NULL, map=NULL, idName,
   if(nTr>1){
     Rcov <- round(as.matrix(Rcov) + (diag(diag(as.matrix(Rcov)))), 5)
     Gcov <- round(as.matrix(Gcov) + (diag(diag(as.matrix(Gcov)))), 5)
-  }else{
-    Rcov <- round(as.matrix(Rcov) + (as.matrix(Rcov)), 5)
-    if(covR==0){
-      Rcov <- diag(diag(Rcov))
-    }
-    Gcov <- round(as.matrix(Gcov) + (as.matrix(Gcov)), 5)
   }
+  if(covR==0){
+    Rcov <- diag(diag(Rcov))
+  }
+  
   #---------------------------------------------------------------------------------------#
   # Creating parameter file based on given model
   #---------------------------------------------------------------------------------------#
