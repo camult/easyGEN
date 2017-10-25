@@ -24,7 +24,7 @@
 #' @param weight name of the column (numeric) with a vector of weights, may be NULL.  If weights is not NULL, the residual variance of each data-point is set to be proportional to the inverse of the squared-weight.
 #' @param PED_DEPTH a integer specifying the depth of pedigree search. The default is 3, byt all pedigrees are loaded if it is set to 0. 
 #' @param covAM type 0 if covariance between additive and maternal genetic effects must be fixed in zero, 1 otherwise. By default covAM=1.
-#' @param covR type 0 if covariance between additive and maternal genetic effects must be fixed in zero, 1 otherwise. By default covAM=1.
+#' @param covR type 0 if residual covariance must be fixed in zero, 1 otherwise. By default covAM=1.
 #' @param useF logical value indicating whether inbreeding coefficient of this animal should be computed. Default is FALSE.
 #' 
 #' @return gibbsf90 results. 

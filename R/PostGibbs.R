@@ -24,6 +24,7 @@
 #' @param ICgraph It is a logical name, indicating if the IC Graph should be created.
 #' @param Summary It is a logical name, indicating if the statistical summary should be run.
 #' @param covAM type 0 if covariance between additive and maternal genetic effects must be fixed in zero, 1 otherwise. By default covAM=1.
+#' @param DFS It is a logical name. Set it to TRUE to remove any adjacent cycles if any by using Depth First Search (DFS).
 #' 
 #' 
 #' @return A PDF file with graphics that summarizes an as.mcmc.obj 
@@ -79,7 +80,7 @@
 #' @import Rgraphviz WriteXLS coda Matrix graph gdata
 ##------------------------------------------------------------------------------------------##
 PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
-                   Names=c(),ICgraph=FALSE,Summary=TRUE, covAM=1){
+                   Names=c(),ICgraph=FALSE,Summary=TRUE, covAM=1, DFS=FALSE){
   ##---------------------------------------------------------------------------------------##
   ## Matrix functions
   ##----------------------------------------------------------------------------------------##
@@ -4000,80 +4001,82 @@ PostGibbs=function(local=getwd(),burnIn=0,thinning=1,line=1,HPD=.95,
     # Madison, September 30, 2017
     # This function is from predictionet R package
     #---------------------------------------------------------------------------------#
-    adj.remove.cycles <- function (adjmat, from, maxlength){
-      pathlength = 0
-      ".adj.remove.cycles.DFS" <- function(adjmat, adjmat.mask, nodix.from, nodix, nodest, pathlength, maxlength) {
-        if (nodix.from %in% (1:length(nodest)) && nodest[nodix] == 1) {
-          adjmat.mask[nodix.from, nodix] <- TRUE
-          return(adjmat.mask)
-        }
-        else {
-          if (pathlength > maxlength) {
+    if(isTRUE(DFS)){
+      adj.remove.cycles <- function (adjmat, from, maxlength){
+        pathlength = 0
+        ".adj.remove.cycles.DFS" <- function(adjmat, adjmat.mask, nodix.from, nodix, nodest, pathlength, maxlength) {
+          if (nodix.from %in% (1:length(nodest)) && nodest[nodix] == 1) {
+            adjmat.mask[nodix.from, nodix] <- TRUE
             return(adjmat.mask)
           }
           else {
-            adjmat2 <- adjmat
-            adjmat2[adjmat.mask] <- 0
-            ee <- which(adjmat2[nodix, ] > 0)
-            ee <- ee[order(adjmat2[nodix, ee], decreasing = FALSE)]
-            if (length(ee) > 0) {
-              for (i in 1:length(ee)) {
-                nodest2 <- nodest
-                nodest2[nodix] <- 1
-                adjmat.mask <- .adj.remove.cycles.DFS(adjmat = adjmat, 
-                                                      adjmat.mask = adjmat.mask, 
-                                                      nodix.from = nodix, 
-                                                      nodix = ee[i], 
-                                                      nodest = nodest2, 
-                                                      pathlength = pathlength + 1, 
-                                                      maxlength = maxlength)
-              }
+            if (pathlength > maxlength) {
               return(adjmat.mask)
             }
             else {
-              return(adjmat.mask)
+              adjmat2 <- adjmat
+              adjmat2[adjmat.mask] <- 0
+              ee <- which(adjmat2[nodix, ] > 0)
+              ee <- ee[order(adjmat2[nodix, ee], decreasing = FALSE)]
+              if (length(ee) > 0) {
+                for (i in 1:length(ee)) {
+                  nodest2 <- nodest
+                  nodest2[nodix] <- 1
+                  adjmat.mask <- .adj.remove.cycles.DFS(adjmat = adjmat, 
+                                                        adjmat.mask = adjmat.mask, 
+                                                        nodix.from = nodix, 
+                                                        nodix = ee[i], 
+                                                        nodest = nodest2, 
+                                                        pathlength = pathlength + 1, 
+                                                        maxlength = maxlength)
+                }
+                return(adjmat.mask)
+              }
+              else {
+                return(adjmat.mask)
+              }
             }
           }
         }
-      }
-      if (!is.matrix(adjmat) && nrow(adjmat) != ncol(adjmat)) {
-        stop("the adjacency matrix should be square!")
-      }
-      if (is.null(rownames(adjmat))) {
-        rownames(adjmat) <- colnames(adjmat) <- paste("X", 1:nrow(adjmat), sep = "")
-      }
-      nNames <- rownames(adjmat)
-      adjmat <- adjmat[nNames, nNames, drop = FALSE]
-      adjmat2 <- adjmat
-      adjmat.mask <- matrix(FALSE, nrow = nrow(adjmat), ncol = ncol(adjmat), 
-                            dimnames = dimnames(adjmat))
-      iix <- which(diag(adjmat2) != 0)
-      if (length(iix) > 0) {
-        adjmat.mask[cbind(iix, iix)] <- TRUE
-      }
-      adjmat2[adjmat.mask] <- 0
-      if (missing(from)) {
-        nnix <- order(apply(adjmat2, 1, max), decreasing = FALSE)
-      }
-      else {
-        if (is.integer(from)) {
-          nnix <- from
+        if (!is.matrix(adjmat) && nrow(adjmat) != ncol(adjmat)) {
+          stop("the adjacency matrix should be square!")
+        }
+        if (is.null(rownames(adjmat))) {
+          rownames(adjmat) <- colnames(adjmat) <- paste("X", 1:nrow(adjmat), sep = "")
+        }
+        nNames <- rownames(adjmat)
+        adjmat <- adjmat[nNames, nNames, drop = FALSE]
+        adjmat2 <- adjmat
+        adjmat.mask <- matrix(FALSE, nrow = nrow(adjmat), ncol = ncol(adjmat), 
+                              dimnames = dimnames(adjmat))
+        iix <- which(diag(adjmat2) != 0)
+        if (length(iix) > 0) {
+          adjmat.mask[cbind(iix, iix)] <- TRUE
+        }
+        adjmat2[adjmat.mask] <- 0
+        if (missing(from)) {
+          nnix <- order(apply(adjmat2, 1, max), decreasing = FALSE)
         }
         else {
-          nnix <- match(from, nNames)
+          if (is.integer(from)) {
+            nnix <- from
+          }
+          else {
+            nnix <- match(from, nNames)
+          }
         }
+        for (i in 1:length(nnix)) {
+          nodest <- rep(0, ncol(adjmat2))
+          names(nodest) <- colnames(adjmat2)
+          adjmat.mask <- .adj.remove.cycles.DFS(adjmat = adjmat2, 
+                                                adjmat.mask = adjmat.mask, nodix.from = -1, nodix = nnix[i], 
+                                                nodest = nodest, pathlength = pathlength, maxlength = maxlength)
+          adjmat2[adjmat.mask] <- 0
+        }
+        return(adjmat2)
       }
-      for (i in 1:length(nnix)) {
-        nodest <- rep(0, ncol(adjmat2))
-        names(nodest) <- colnames(adjmat2)
-        adjmat.mask <- .adj.remove.cycles.DFS(adjmat = adjmat2, 
-                                              adjmat.mask = adjmat.mask, nodix.from = -1, nodix = nnix[i], 
-                                              nodest = nodest, pathlength = pathlength, maxlength = maxlength)
-        adjmat2[adjmat.mask] <- 0
-      }
-      return(adjmat2)
+      pdag <- adj.remove.cycles(adjmat=pdag, from=1, maxlength=ncol(pdag)-1)
     }
-    pdag <- adj.remove.cycles(adjmat=pdag, from=1, maxlength=ncol(pdag)-1)
     #---------------------------------------------------------------------------------#
     # graph plot
     #---------------------------------------------------------------------------------#
