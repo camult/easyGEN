@@ -31,8 +31,9 @@ SEMeff <- function(local=setwd(), SEMplot=TRUE){
   write.table("gibbs2f90.exe < renfSEM",   file="gibbs2SEM.bat",   row.names=F, col.names=F, quote=F)
   gibbs2SEM <- data.frame(renum=capture.output(system("gibbs2SEM.bat", intern=TRUE)))
   Effects <- read.table("final_solutions", header=F, skip=1)
-  Effects <- Effects[Effects[,4]>0,c(1,2,4,5)]
+  Effects <- Effects[Effects[,5]>0,c(1,2,4,5)]
   colnames(Effects) <- c("Trait","Covariate","Mean", "SD")
+  Effects <- round(Effects[,4])
   if(isTRUE(SEMplot)){
     AdjMat <- matrix(0, nrow=max(Effects$Trait), ncol = max(Effects$Trait))
     for(i in 1:nrow(Effects)){
