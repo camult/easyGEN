@@ -346,7 +346,7 @@ gibbsf90 <- function(formula, phen, ped=NULL, geno=NULL, map=NULL, idName,
     cat("   running gibbs2f90 program...\n")
     system("gibbs2f90.bat", intern=intern)
     #---------------------------------------------------------------------------------------#
-    # Running gibbs2f90
+    # Running postgibbsf90
     #---------------------------------------------------------------------------------------#
     cat("   running postgibbsf90 program...\n\n")
     system("postgibbsf90.bat", intern=intern)
