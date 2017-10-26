@@ -33,7 +33,6 @@ SEMeff <- function(local=setwd(), SEMplot=TRUE){
   Effects <- read.table("final_solutions", header=F, skip=1)
   Effects <- Effects[Effects[,5]>0,c(1,2,4,5)]
   colnames(Effects) <- c("Trait","Covariate","Mean", "SD")
-  Effects <- round(Effects[,4])
   if(isTRUE(SEMplot)){
     AdjMat <- matrix(0, nrow=max(Effects$Trait), ncol = max(Effects$Trait))
     for(i in 1:nrow(Effects)){
