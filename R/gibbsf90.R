@@ -300,6 +300,10 @@ gibbsf90 <- function(formula, phen, ped=NULL, geno=NULL, map=NULL, idName,
   }
   cat("FILE\n")
   cat("pedigree.dat\n")
+  if(!is.null(geno)){
+    cat("SNP_FILE\n")
+    cat("geno.dat\n")
+  }
   cat("PED_DEPTH\n")
   cat(PED_DEPTH,"\n")
   if(useF){
