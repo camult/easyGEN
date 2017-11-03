@@ -76,34 +76,34 @@ gibbsf90 <- function(formula, phen, ped=NULL, geno=NULL, map=NULL, idName,
   file <- file[, !duplicated(colnames(file))]
   if(is.null(Rcov)){
     if(nTr>1){
-      Rcov <- round(cov(file[, trait], use="complete.obs")*0.6, 5)
+      Rcov <- round(var(file[, trait], use="complete.obs")*0.6, 5)
     }else{
-      Rcov <- round(cov(file[, trait], use="complete.obs")*0.6, 5)
+      Rcov <- round(var(file[, trait], use="complete.obs")*0.6, 5)
     }
   }
   if(is.null(Gcov)){
     if(nTr>1){
       if(length(grep("mat", OPTeff))==0){
-        Gcov <- round(cov(file[, trait], use="complete.obs")*0.4, 5)
+        Gcov <- round(var(file[, trait], use="complete.obs")*0.4, 5)
       }else{
         if(nMaternal==nTr){
-          Gcov <- round(cov(file[, rep(trait,2)], use="complete.obs")*0.4, 5)
+          Gcov <- round(var(file[, rep(trait,2)], use="complete.obs")*0.4, 5)
         }
         if(nMaternal<nTr){
-          Gcov <- round(cov(file[, rep(trait,2)], use="complete.obs")*0.4, 5)
+          Gcov <- round(var(file[, rep(trait,2)], use="complete.obs")*0.4, 5)
           Gcov[(nrow(Gcov)-(nTr-nMaternal)+1):nrow(Gcov), ] <- 0
           Gcov[, (nrow(Gcov)-(nTr-nMaternal)+1):nrow(Gcov)] <- 0
         }
       }
     }else{
       if(length(grep("mat", OPTeff))==0){
-        Gcov <- round(cov(file[, trait], use="complete.obs")*0.4, 5)
+        Gcov <- round(var(file[, trait], use="complete.obs")*0.4, 5)
       }else{
         if(nMaternal==nTr){
-          Gcov <- round(cov(file[, rep(trait,2)], use="complete.obs")*0.4, 5)
+          Gcov <- round(var(file[, rep(trait,2)], use="complete.obs")*0.4, 5)
         }
         if(nMaternal<nTr){
-          Gcov <- round(cov(file[, rep(trait,2)], use="complete.obs")*0.4, 5)
+          Gcov <- round(var(file[, rep(trait,2)], use="complete.obs")*0.4, 5)
           Gcov[(nrow(Gcov)-(nTr-nMaternal)+1):nrow(Gcov), ] <- 0
           Gcov[, (nrow(Gcov)-(nTr-nMaternal)+1):nrow(Gcov)] <- 0
         }
