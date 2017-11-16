@@ -194,7 +194,6 @@ remlf90 <- function(formula, phen, ped=NULL, geno=NULL, map=NULL, idName,
     cat("   writting map file...\n")
     write.fwf(map,  "map.dat",  rownames=F, colnames=F, quote=F, justify="right")
   }
-  rm(geno, map)
   if(dimClassEffect>0){
     PosClassEffect <- c(array(0, dimClassEffect))
     for(i in 1:dimClassEffect){
