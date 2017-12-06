@@ -3,8 +3,6 @@ library("Rcpp")
 library("devtools")
 library("roxygen2")
 
-setwd("C:\\Users\\Camult\\Documents\\GitHub")
-
 setwd("C:\\Users\\Camult\\Documents\\GitHub\\easyGEN")
 roxygenise()
 
