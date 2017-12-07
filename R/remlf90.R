@@ -172,7 +172,6 @@ remlf90 <- function(formula, phen, ped=NULL, geno=NULL, map=NULL, idName,
   # (SNP x ID)
   if(!is.null(geno)){
     cat("   writing genotype file...\n")
-    if(ncol(geno)>nrow(geno)) geno <- t(geno)
     geno <- geno[,colnames(geno)%in%pedigree[,1]]
     nID <- ncol(geno)
     nSNP <- nrow(geno)
