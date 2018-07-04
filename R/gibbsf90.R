@@ -167,6 +167,11 @@ gibbsf90 <- function(formula, phen, ped=NULL, geno=NULL, map=NULL, idName,
   #phen <- data.frame(phen[, colnames(phen)%in%keep_phen])
   #phen <- phen[, match(keep_phen, colnames(phen))]
   file <- file[, keep_phen]
+  #------------------------------------------------------------#
+  # Added on 04 July, 2018
+  #------------------------------------------------------------#
+  file <- file[rowSums(!is.na(data.frame(file[,trait]))) > 0, ]
+  #------------------------------------------------------------#
   file[is.na(file)] <- missing
   PosTrait <- grep(paste(paste0("^",trait,"$"),collapse="|"), colnames(file))
   cat("   writing phenotype file...\n")
