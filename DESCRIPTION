@@ -7,9 +7,10 @@ Author: Fernando Brito Lopes
 Maintainer: Fernando Brito Lopes <camult@gmail.com>
 Depends:
     R (>= 3.1),
-    Rgraphviz,
-    coda,
+	Rgraphviz,
+	coda,
     graph,
+	igraph,
     gdata,
     WriteXLS,
     Matrix
@@ -18,4 +19,4 @@ LazyData: true
 License: GPL-3
 SystemRequirements: Perl
 Archs: i386, x64
-RoxygenNote: 6.0.1
+RoxygenNote: 7.1.1
