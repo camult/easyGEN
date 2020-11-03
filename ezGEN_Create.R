@@ -20,4 +20,4 @@ Rd2markdown(rdfile= "C:\\Users\\BRITOLOPESF\\Documents\\GitHub\\easyGEN\\man\\SE
 setwd("C:\\Users\\BRITOLOPESF\\Documents\\GitHub")
 system("R CMD check easyGEN")
 system("R CMD build easyGEN")
-system("R CMD INSTALL ezCV_1.0.tar.gz")
+system("R CMD INSTALL easyGEN_1.01.tar.gz")
