@@ -1300,7 +1300,7 @@ PostGibbs=function(local=getwd(),
             #----------------------------------------------------------------------------------------#
             n2M=as.matrix(strsplit(as.character(Matrix[n1matrix+3]), " ")[[1]])
             mode(n2M)="numeric"
-            n2M=na.omit(n2M)[2]
+            n2M=c(tail(na.omit(n2M), 1))
             #----------------------------------------------------------------------------------------#
             last2M=as.matrix(strsplit(as.character(Matrix[n1matrix+3]), " ")[[1]])
             mode(last2M)="numeric"
@@ -1308,7 +1308,7 @@ PostGibbs=function(local=getwd(),
             #----------------------------------------------------------------------------------------#
             n3M=as.matrix(strsplit(as.character(Matrix[n1matrix+n2matrix+4]), " ")[[1]])
             mode(n3M)="numeric"
-            n3M=na.omit(n3M)[2]
+            n3M=c(tail(na.omit(n3M), 1))
             #----------------------------------------------------------------------------------------#
             # A = A + M + MPE + R --> M and MPE for all traits
             # B = A + M + MPE + R --> M for all traits, but MPE only for pre weaning traits
@@ -1468,44 +1468,53 @@ PostGibbs=function(local=getwd(),
                 CorrG=t(CorrG)
                 colnames(CorrG)=CorrG[2,]
                 CorrG=as.matrix(CorrG)[-c(1,2),]
-                covPe=mPe[upper.tri(mPe)]; covPe[covPe==0]=NA; covPe=c(na.omit(covPe));covPe=sort(covPe)
-                matrixPe=mPe; diag(matrixPe)=0; matrixPe=which(matrixPe!=0,arr.ind=T)        
-                if (nrow(matrixPe)>1){ matrixPe=matrixPe[order(matrixPe[,1], matrixPe[,2]), ] }
-                covPe=data.frame(id=covPe, comp=paste("COV","mpe",matrixPe[,1],"mpe",matrixPe[,2], sep=""))
                 #--------------------------------------------------------------------------------------#
-                covR=mR[upper.tri(mR)]; covR[covR==0]=NA; covR=c(na.omit(covR));covR=sort(covR)
-                matrixR=mR; diag(matrixR)=0; matrixR=which(matrixR!=0, arr.ind=T)        
-                if (nrow(matrixR)>1){ matrixR=matrixR[order(matrixR[,1], matrixR[,2]), ] }
-                covR=data.frame(id=covR, comp=paste("COV","e",matrixR[,1],"e",matrixR[,2], sep=""))
-                CorrE=matrix(NA, nrow=nrow(arq), ncol=((traits^2)-traits)/2)
-                subCorE=mR
-                colnames(arq)=c(1:ncol(arq))
-                subCorE[lower.tri(subCorE)]=lowerTriangle(t(subCorE))
-                aux=as.matrix(subCorE)
-                for(n in 1:nrow(arq)){
-                    for(k in 1:ncol(arq)){
-                        for(i in 1:traits){
-                            for(j in 1:traits){
-                                if(subCorE[i,j]==as.numeric(colnames(arq)[k])){
-                                    aux[i,j]=arq[n, as.numeric(colnames(arq)[k])]
+                # In case it is a single trait, R and MPE will be just a vector, not  matrix, so no covariance
+                #--------------------------------------------------------------------------------------#
+                if(traits > 1) {
+                    covPe=mPe[upper.tri(mPe)]; covPe[covPe==0]=NA; covPe=c(na.omit(covPe));covPe=sort(covPe)
+                    matrixPe=mPe; diag(matrixPe)=0; matrixPe=which(matrixPe!=0,arr.ind=T)        
+                    if (nrow(matrixPe)>1){
+                        matrixPe=matrixPe[order(matrixPe[,1], matrixPe[,2]), ] 
+                        covPe=data.frame(id=covPe, comp=paste("COV","mpe",matrixPe[,1],"mpe",matrixPe[,2], sep=""))
+                    }
+                    #--------------------------------------------------------------------------------------#
+                    covR=mR[upper.tri(mR)]; covR[covR==0]=NA; covR=c(na.omit(covR));covR=sort(covR)
+                    matrixR=mR; diag(matrixR)=0; matrixR=which(matrixR!=0, arr.ind=T)        
+                    if (nrow(matrixR)>1){ matrixR=matrixR[order(matrixR[,1], matrixR[,2]), ] }
+                    covR=data.frame(id=covR, comp=paste("COV","e",matrixR[,1],"e",matrixR[,2], sep=""))
+                    CorrE=matrix(NA, nrow=nrow(arq), ncol=((traits^2)-traits)/2)
+                    subCorE=mR
+                    colnames(arq)=c(1:ncol(arq))
+                    subCorE[lower.tri(subCorE)]=lowerTriangle(t(subCorE))
+                    aux=as.matrix(subCorE)
+                    for(n in 1:nrow(arq)){
+                        for(k in 1:ncol(arq)){
+                            for(i in 1:traits){
+                                for(j in 1:traits){
+                                    if(subCorE[i,j]==as.numeric(colnames(arq)[k])){
+                                        aux[i,j]=arq[n, as.numeric(colnames(arq)[k])]
+                                    }
                                 }
                             }
                         }
+                        aux=cov2cor(aux)
+                        aux=aux[lower.tri(aux)]
+                        CorrE[n,]=aux
+                        aux=as.matrix(subCorE)
                     }
-                    aux=cov2cor(aux)
-                    aux=aux[lower.tri(aux)]
-                    CorrE[n,]=aux
-                    aux=as.matrix(subCorE)
+                    CorrE=data.frame(id=seq(1:ncol(CorrE)), t(CorrE))
+                    CorrE=CorrE[!rowSums(CorrE==0)>=1, ]
+                    corE=data.frame(id=CorrE[,1], comp=paste("COR","e",matrixR[,1],"e",matrixR[,2], sep=""))
+                    CorrE=merge(corE, CorrE, by=c("id", "id"), sort=FALSE)
+                    CorrE=t(CorrE)
+                    colnames(CorrE)=CorrE[2,]
+                    CorrE=as.matrix(CorrE)[-c(1,2),]
+                    componentes=rbind(vG,vPe,vR,covG,covPe,covR)
+                } else {
+                    componentes=rbind(vG,vPe,vR,covG) 
                 }
-                CorrE=data.frame(id=seq(1:ncol(CorrE)), t(CorrE))
-                CorrE=CorrE[!rowSums(CorrE==0)>=1, ]
-                corE=data.frame(id=CorrE[,1], comp=paste("COR","e",matrixR[,1],"e",matrixR[,2], sep=""))
-                CorrE=merge(corE, CorrE, by=c("id", "id"), sort=FALSE)
-                CorrE=t(CorrE)
-                colnames(CorrE)=CorrE[2,]
-                CorrE=as.matrix(CorrE)[-c(1,2),]
                 #--------------------------------------------------------------------------------------#
-                componentes=rbind(vG,vPe,vR,covG,covPe,covR)
                 arq=data.frame(id=seq(1:ncol(arq)), t(arq))
                 arq=merge(componentes, arq, by=c("id", "id"), sort=FALSE)
                 arq=t(arq)
@@ -1514,7 +1523,11 @@ PostGibbs=function(local=getwd(),
                 mode(arq)="numeric"
                 rownames(arq)=NULL
                 #--------------------------------------------------------------------------------------#
-                arq=cbind(arq, CorrG, CorrE, Ha, Hm, c2)
+                if(traits > 1) {
+                    arq=cbind(arq, CorrG, CorrE, Ha, Hm, c2)
+                } else {
+                    arq=cbind(arq, CorrG, Ha, Hm, c2)
+                }
                 arq=as.matrix(arq); mode(arq)="numeric"
                 #--------------------------------------------------------------------------------------#
                 cat("\nSummarizing postgibbs results...\n")
