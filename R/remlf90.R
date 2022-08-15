@@ -47,7 +47,7 @@ remlf90 <- function(formula, phen, ped=NULL, geno=NULL, map=NULL, idName,
   centerText <- function() {
     width <- getOption("width")
     A <- ("                                                       ._____.    \n")
-    B <- ("    _/////_            Fernando Brito Lopes           _|_____|_   \n")
+    B <- ("    _//////_            Fernando Brito Lopes           _|_____|_   \n")
     C <- ("   (' o o ')     Animal Scientist (Zootechnician)     (' o o ')   \n")
     D <- ("__ooO_(_)_Ooo_____ Animal Breeding and Genetics _____ooO_(_)_Ooo__\n")
     E <- ("                    e-mail: <camult@gmail.com>                    \n")
