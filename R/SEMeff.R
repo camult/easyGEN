@@ -1,4 +1,4 @@
-#' @title  SEM Effects
+#' @title  SEM Effects23
 #' 
 #' @description R functions for summarize effects from strucutal equation models.
 #' 
