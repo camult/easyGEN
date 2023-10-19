@@ -2,7 +2,7 @@
 % Please edit documentation in R/PostGibbs.R
 \name{PostGibbs}
 \alias{PostGibbs}
-\title{Summary of Multi-trait Bayesian Models}
+\title{Summary of Multi-trait Bayesian Models23}
 \usage{
 PostGibbs(local = getwd(), burnIn = 0, thinning = 1, line = 1,
   HPD = 0.95, Names = c(), ICgraph = FALSE, Summary = TRUE, covAM = 1,
