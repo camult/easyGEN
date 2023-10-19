@@ -1,4 +1,4 @@
-% Generated  by roxygen2: do not edit by hand
+% Generated  by roxygen2: do not edit by hand23
 % Please edit documentation in R/SEMeff.R
 \name{SEMeff}
 \alias{SEMeff}
