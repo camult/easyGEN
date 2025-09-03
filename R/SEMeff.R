@@ -1,6 +1,6 @@
 #' @title  SEM Effects23
 #' 
-#' @description R functions for summarize effects from strucutal equation models.
+#' @description R  functions for summarize effects from strucutal equation models.
 #' 
 #' @param local Set here the path of directory where the results of  THRGIBBS* and GIBBS* are. If you are using the command setwd() to change the directory, you don't need to use this parameter.
 #' @param SEMplot It is a logical name, indicating if the SEM plot should be created.
