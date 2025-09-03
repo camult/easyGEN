@@ -1,4 +1,4 @@
-#' @title Summary  of Multi-trait Bayesian Models23
+#' @title  Summary  of Multi-trait Bayesian Models23
 #' 
 #' @description This package is easy to use and can be helpful to summarize Bayesian Gibbs results 
 #' when you run BLUPf90 programs (Misztal et al., 2014) and DMU packages (Madsen et al., 2006). 
@@ -4203,3 +4203,4 @@ PostGibbs=function(local=getwd(),
         for(remove in 1:length(RUNfiles)) file.remove(RUNfiles[remove])
     }
 }
+
