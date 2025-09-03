@@ -1,4 +1,4 @@
-#' @title R functions for interfacing remlf90+ software
+#' @title R  functions for interfacing remlf90+ software
 #' 
 #' @description The function uses the model formula language in R to describe the model and from this generates the files needed to do an analysis using remlf90 software!
 #' 
@@ -466,3 +466,4 @@ remlf90 <- function(formula, phen, ped=NULL, geno=NULL, map=NULL, idName,
     invisible(file.remove(Remove))
   }
 }
+
