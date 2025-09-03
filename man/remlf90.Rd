@@ -63,6 +63,6 @@ The function uses the model formula language in R to describe the model and from
 }
 \references{
 Misztal I, Tsuruta S.,  Lourenco D., Aguilar I., Legarra A., 
-            Vitezica Z (2014). Manual  for BLUPF90   family	of programs. 
-            Available at: <http://nce.ads.uga.edu/wiki/lib/exe/fetch.php?media=blupf90_all1.pdf>.
+            Vitezica Z (2022). Manual  for BLUPF90   family	of programs. 
+            Available at: <https://nce.ads.uga.edu/html/projects/programs/docs/blupf90_all8.pdf>.
 }
