@@ -1,4 +1,4 @@
-#' @title A  function interfacing gibbs2f90+
+#' @title A   function interfacing gibbs2f90+
 #' 
 #' @description The function uses the model formula language in R to describe the model and from this generates the files needed to do an analysis using gibbs2f90 software!
 #' 
@@ -370,3 +370,4 @@ gibbsf90 <- function(formula, phen, ped=NULL, geno=NULL, map=NULL, idName,
     #invisible(file.remove(Remove))
   }
 }
+
